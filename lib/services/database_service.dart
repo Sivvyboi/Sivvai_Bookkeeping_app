@@ -1,0 +1,326 @@
+import 'dart:convert';
+import 'dart:io';
+import 'package:isar/isar.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:intl/intl.dart';
+import '../models/local_customer.dart';
+import '../models/local_transaction.dart';
+
+class DatabaseService {
+  static late Isar isar;
+
+  // Private constructor for singleton
+  DatabaseService._();
+
+  static final DatabaseService _instance = DatabaseService._();
+
+  factory DatabaseService() {
+    return _instance;
+  }
+
+  /// 1. Initialize Isar and open the collections safely on app launch.
+  static Future<void> init() async {
+    final dir = await getApplicationDocumentsDirectory();
+    isar = await Isar.open(
+      [LocalCustomerSchema, LocalTransactionSchema],
+      directory: dir.path,
+    );
+  }
+
+  /// 2. Insert a new 'LocalTransaction'
+  Future<void> addTransaction({
+    required double amount,
+    DateTime? timestamp,
+    String transactionType = 'INFLOW',
+    String? remarks,
+    LocalCustomer? customer,
+    bool isCredit = false,
+  }) async {
+    final now = timestamp ?? DateTime.now();
+    final newTransaction = LocalTransaction()
+      ..amount = amount
+      ..timestamp = now
+      ..transactionType = transactionType
+      ..remarks = remarks
+      ..isCredit = isCredit;
+
+    if (customer != null) {
+      newTransaction.customer.value = customer;
+      customer.lastUsed = now;
+    }
+
+    await isar.writeTxn(() async {
+      await isar.localTransactions.put(newTransaction);
+      if (customer != null) {
+        await newTransaction.customer.save();
+        await isar.localCustomers.put(customer); // Update lastUsed
+        await _recalculateCustomerDebt(customer.id);
+      }
+    });
+  }
+
+  /// Update an existing transaction
+  Future<void> updateTransaction({
+    required int id,
+    required double amount,
+    required String transactionType,
+    String? remarks,
+    LocalCustomer? customer,
+    bool isCredit = false,
+    DateTime? timestamp,
+  }) async {
+    final tx = await isar.localTransactions.get(id);
+    if (tx == null) return;
+
+    await tx.customer.load();
+    final oldCustomer = tx.customer.value;
+    final now = timestamp ?? DateTime.now();
+
+    tx.amount = amount;
+    tx.transactionType = transactionType;
+    tx.remarks = remarks;
+    tx.isCredit = isCredit;
+    tx.timestamp = now;
+    tx.customer.value = customer;
+
+    await isar.writeTxn(() async {
+      await isar.localTransactions.put(tx);
+      await tx.customer.save();
+      
+      if (customer != null) {
+        customer.lastUsed = now;
+        await isar.localCustomers.put(customer);
+      }
+
+      if (oldCustomer != null) {
+        await _recalculateCustomerDebt(oldCustomer.id);
+      }
+      if (customer != null && (oldCustomer == null || customer.id != oldCustomer.id)) {
+        await _recalculateCustomerDebt(customer.id);
+      }
+    });
+  }
+
+  /// Delete a transaction
+  Future<void> deleteTransaction(int id) async {
+    final tx = await isar.localTransactions.get(id);
+    if (tx == null) return;
+
+    await tx.customer.load();
+    final customer = tx.customer.value;
+
+    await isar.writeTxn(() async {
+      await isar.localTransactions.delete(id);
+      if (customer != null) {
+        await _recalculateCustomerDebt(customer.id);
+      }
+    });
+  }
+
+  /// Recalculate the debt amount for a specific customer based on all their transactions
+  Future<void> _recalculateCustomerDebt(int customerId) async {
+    final customer = await isar.localCustomers.get(customerId);
+    if (customer == null) return;
+
+    final transactions = await isar.localTransactions
+        .filter()
+        .customer((q) => q.idEqualTo(customerId))
+        .findAll();
+
+    double balance = 0.0;
+    for (var tx in transactions) {
+      if (customer.relationType == 'DEBTOR') {
+        if (tx.transactionType == 'PAYMENT') {
+          balance -= tx.amount;
+        } else if (tx.isCredit) {
+          if (tx.transactionType == 'INFLOW') {
+            balance += tx.amount;
+          } else if (tx.transactionType == 'OUTFLOW') {
+            balance -= tx.amount;
+          }
+        }
+      } else if (customer.relationType == 'CREDITOR') {
+        if (tx.transactionType == 'PAYMENT') {
+          balance -= tx.amount;
+        } else if (tx.isCredit) {
+          if (tx.transactionType == 'OUTFLOW') {
+            balance += tx.amount;
+          } else if (tx.transactionType == 'INFLOW') {
+            balance -= tx.amount;
+          }
+        }
+      }
+    }
+    customer.totalDebtAmount = balance;
+    await isar.localCustomers.put(customer);
+  }
+
+  /// 3. Read transactions as a live stream
+  Stream<List<LocalTransaction>> watchTransactions({DateTime? start, DateTime? end}) {
+    final query = isar.localTransactions.where();
+    
+    if (start != null && end != null) {
+      return query.filter().timestampBetween(start, end).sortByTimestampDesc().watch(fireImmediately: true);
+    } else if (start != null) {
+      return query.filter().timestampGreaterThan(start, include: true).sortByTimestampDesc().watch(fireImmediately: true);
+    } else if (end != null) {
+      return query.filter().timestampLessThan(end, include: true).sortByTimestampDesc().watch(fireImmediately: true);
+    }
+
+    return query.sortByTimestampDesc().watch(fireImmediately: true);
+  }
+
+  /// 4. Add a new 'LocalCustomer'
+  Future<LocalCustomer> addCustomer(String name, {String? phone, required String relationType}) async {
+    final newCustomer = LocalCustomer()
+      ..fullName = name
+      ..phoneNumber = phone
+      ..relationType = relationType
+      ..lastUsed = DateTime.now();
+
+    await isar.writeTxn(() async {
+      await isar.localCustomers.put(newCustomer);
+    });
+    
+    return newCustomer;
+  }
+
+  /// Settle a ledger balance by creating a PAYMENT transaction record
+  Future<void> settleLedgerBalance({
+    required int customerId,
+    required double amountPaid,
+    required bool isCreditor,
+  }) async {
+    final customer = await isar.localCustomers.get(customerId);
+    if (customer == null) return;
+
+    final now = DateTime.now();
+    final newTransaction = LocalTransaction()
+      ..amount = amountPaid
+      ..timestamp = now
+      ..transactionType = 'PAYMENT'
+      ..remarks = isCreditor ? 'Paid to Creditor' : 'Received from Debtor'
+      ..isCredit = false; // Settlement is a cash movement
+
+    newTransaction.customer.value = customer;
+    customer.lastUsed = now;
+
+    await isar.writeTxn(() async {
+      await isar.localTransactions.put(newTransaction);
+      await newTransaction.customer.save();
+      await isar.localCustomers.put(customer); // Update lastUsed
+      await _recalculateCustomerDebt(customerId);
+    });
+  }
+
+  /// 4b. Fetch the list of existing customers.
+  Future<List<LocalCustomer>> getCustomers() async {
+    return await isar.localCustomers.where().sortByLastUsedDesc().findAll();
+  }
+
+  /// 4c. Watch customers for real-time updates.
+  Stream<List<LocalCustomer>> watchCustomers() {
+    return isar.localCustomers.where().sortByLastUsedDesc().watch(fireImmediately: true);
+  }
+
+  /// 4d. Watch transactions for a specific customer
+  Stream<List<LocalTransaction>> watchCustomerTransactions(int customerId) {
+    return isar.localTransactions
+        .filter()
+        .customer((q) => q.idEqualTo(customerId))
+        .sortByTimestampDesc()
+        .watch(fireImmediately: true);
+  }
+
+  /// 5. Export Data to JSON
+  Future<String> exportBackup() async {
+    final customers = await isar.localCustomers.where().findAll();
+    final transactions = await isar.localTransactions.where().findAll();
+
+    final transactionDataList = [];
+    for (var t in transactions) {
+      await t.customer.load(); 
+      transactionDataList.add({
+        'amount': t.amount,
+        'timestamp': t.timestamp.toIso8601String(),
+        'transactionType': t.transactionType,
+        'remarks': t.remarks ?? "",
+        'isCredit': t.isCredit,
+        'customerName': t.customer.value?.fullName,
+      });
+    }
+
+    final data = {
+      'version': 5,
+      'exportedAt': DateTime.now().toIso8601String(),
+      'customers': customers.map((c) => {
+        'fullName': c.fullName,
+        'phoneNumber': c.phoneNumber ?? "",
+        'totalDebtAmount': c.totalDebtAmount,
+        'relationType': c.relationType,
+        'lastUsed': c.lastUsed?.toIso8601String(),
+      }).toList(),
+      'transactions': transactionDataList,
+    };
+
+    final jsonString = jsonEncode(data);
+    final directory = await getTemporaryDirectory();
+    final dateStr = DateFormat('yyyyMMdd').format(DateTime.now());
+    final file = File('${directory.path}/bookkeeper_backup_$dateStr.json');
+    await file.writeAsString(jsonString);
+    return file.path;
+  }
+
+  /// 6. Import Data from JSON string
+  Future<void> importBackup(String jsonString) async {
+    final Map<String, dynamic> data = jsonDecode(jsonString.trim());
+    
+    await isar.writeTxn(() async {
+      await isar.localTransactions.clear();
+      await isar.localCustomers.clear();
+
+      final Map<String, LocalCustomer> nameToCustomer = {};
+
+      final customersData = data['customers'] as List;
+      for (var cData in customersData) {
+        final customer = LocalCustomer()
+          ..fullName = cData['fullName']
+          ..phoneNumber = cData['phoneNumber']
+          ..totalDebtAmount = (cData['totalDebtAmount'] as num).toDouble()
+          ..relationType = cData['relationType'] ?? 'DEBTOR'
+          ..lastUsed = cData['lastUsed'] != null ? DateTime.parse(cData['lastUsed']) : null;
+        
+        await isar.localCustomers.put(customer);
+        nameToCustomer[customer.fullName] = customer;
+      }
+
+      final transactionsData = data['transactions'] as List;
+      for (var tData in transactionsData) {
+        final transaction = LocalTransaction()
+          ..amount = (tData['amount'] as num).toDouble()
+          ..timestamp = DateTime.parse(tData['timestamp'])
+          ..transactionType = tData['transactionType']
+          ..remarks = tData['remarks']
+          ..isCredit = tData['isCredit'] ?? false;
+        
+        final customerName = tData['customerName'];
+        if (customerName != null && nameToCustomer.containsKey(customerName)) {
+          transaction.customer.value = nameToCustomer[customerName];
+        }
+
+        await isar.localTransactions.put(transaction);
+        if (transaction.customer.value != null) {
+          await transaction.customer.save();
+        }
+      }
+    });
+  }
+
+  /// 7. Clear All Data
+  Future<void> clearAllData() async {
+    await isar.writeTxn(() async {
+      await isar.localTransactions.clear();
+      await isar.localCustomers.clear();
+    });
+  }
+}
