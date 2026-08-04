@@ -1,96 +1,150 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import '../adaptive_brand_logo.dart';
 import '../providers/transaction_provider.dart';
+import '../providers/theme_provider.dart';
 import '../utils/size_config.dart';
+import '../widgets/responsive_value_text.dart';
 import 'add_transaction_screen.dart';
 import 'debt_ledger_screen.dart';
+import 'settings_screen.dart';
+import 'global_history_screen.dart';
+
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    SizeConfig().init(context);
+    SizeConfig.init(context);
+    final theme = Theme.of(context);
+    final statusColors = theme.extension<StatusColors>()!;
     final currencyFormat = NumberFormat.currency(symbol: '₦', decimalDigits: 2);
 
     return Scaffold(
-      backgroundColor: Colors.grey[100],
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: Text('Bookkeeper Dashboard', 
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: SizeConfig.setSp(20))),
-        backgroundColor: Colors.indigo,
-        foregroundColor: Colors.white,
-        elevation: 0,
+        title: Text(
+          'Bookkeeper Dashboard',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20.sp),
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.settings),
-            onPressed: () => _showBackupDialog(context),
-            tooltip: 'Backup & Restore',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const SettingsScreen()),
+            ),
+            tooltip: 'Settings',
           ),
         ],
       ),
       body: Consumer<TransactionProvider>(
         builder: (context, provider, child) {
-          return SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildSummaryCard(context, provider, currencyFormat),
-                _buildQuickActions(context),
-                
-                // Date Range Filters
-                Padding(
-                  padding: EdgeInsets.symmetric(horizontal: SizeConfig.blockWidth(4)),
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
+          return RefreshIndicator(
+            onRefresh: () async => await provider.refreshData(),
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(
+                parent: BouncingScrollPhysics(),
+              ),
+              child: Column(
+                // --- FIXED CORRUPTED TYPO HERE ---
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildSummaryCard(
+                    context,
+                    provider,
+                    currencyFormat,
+                    statusColors,
+                  ),
+                  _buildQuickActions(context, theme),
+
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 4.w),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          _buildDateChip(
+                            provider,
+                            'All',
+                            TransactionDateFilter.allTime,
+                          ),
+                          SizedBox(width: 2.w),
+                          _buildDateChip(
+                            provider,
+                            'Today',
+                            TransactionDateFilter.today,
+                          ),
+                          SizedBox(width: 2.w),
+                          _buildDateChip(
+                            provider,
+                            'This Week',
+                            TransactionDateFilter.thisWeek,
+                          ),
+                          SizedBox(width: 2.w),
+                          _buildDateChip(
+                            provider,
+                            'This Month',
+                            TransactionDateFilter.thisMonth,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  SizedBox(height: 1.5.h),
+
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 4.w),
                     child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        _buildDateChip(provider, 'All', TransactionDateFilter.allTime),
-                        SizedBox(width: SizeConfig.blockWidth(2)),
-                        _buildDateChip(provider, 'Today', TransactionDateFilter.today),
-                        SizedBox(width: SizeConfig.blockWidth(2)),
-                        _buildDateChip(provider, 'This Week', TransactionDateFilter.thisWeek),
-                        SizedBox(width: SizeConfig.blockWidth(2)),
-                        _buildDateChip(provider, 'This Month', TransactionDateFilter.thisMonth),
+                        Text(
+                          'Recent Transactions',
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            fontSize: 18.sp,
+                          ),
+                        ),
+                        PopupMenuButton<TransactionTypeFilter>(
+                          initialValue: provider.typeFilter,
+                          icon: Icon(
+                            Icons.filter_list,
+                            color: theme.colorScheme.primary,
+                          ),
+                          onSelected: provider.setTypeFilter,
+                          itemBuilder: (context) => [
+                            const PopupMenuItem(
+                              value: TransactionTypeFilter.all,
+                              child: Text('Show All'),
+                            ),
+                            const PopupMenuItem(
+                              value: TransactionTypeFilter.sales,
+                              child: Text('Sales Only'),
+                            ),
+                            const PopupMenuItem(
+                              value: TransactionTypeFilter.expenses,
+                              child: Text('Expenses Only'),
+                            ),
+                            const PopupMenuItem(
+                              value: TransactionTypeFilter.debts,
+                              child: Text('Debts & Payments'),
+                            ),
+                          ],
+                        ),
                       ],
                     ),
                   ),
-                ),
-                
-                SizedBox(height: SizeConfig.blockHeight(1.5)),
-                
-                // Transaction Type Filters
-                Padding(
-                  padding: EdgeInsets.symmetric(horizontal: SizeConfig.blockWidth(4)),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Recent Transactions',
-                        style: TextStyle(
-                          fontSize: SizeConfig.setSp(18), 
-                          fontWeight: FontWeight.bold
-                        ),
-                      ),
-                      PopupMenuButton<TransactionTypeFilter>(
-                        initialValue: provider.typeFilter,
-                        icon: const Icon(Icons.filter_list, color: Colors.indigo),
-                        onSelected: provider.setTypeFilter,
-                        itemBuilder: (context) => [
-                          const PopupMenuItem(value: TransactionTypeFilter.all, child: Text('Show All')),
-                          const PopupMenuItem(value: TransactionTypeFilter.sales, child: Text('Sales Only')),
-                          const PopupMenuItem(value: TransactionTypeFilter.expenses, child: Text('Expenses Only')),
-                          const PopupMenuItem(value: TransactionTypeFilter.debts, child: Text('Debts & Payments')),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
 
-                _buildTransactionList(provider, currencyFormat),
-              ],
+                  HomeTransactionHistoryList(
+                    transactions: provider.transactions,
+                    currencyFormat: currencyFormat,
+                    statusColors: statusColors,
+                  ),
+                  SizedBox(height: 4.h),
+                ],
+              ),
             ),
           );
         },
@@ -98,261 +152,199 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildDateChip(TransactionProvider provider, String label, TransactionDateFilter filter) {
-    final isSelected = provider.dateFilter == filter;
+  Widget _buildDateChip(
+    TransactionProvider provider,
+    String label,
+    TransactionDateFilter filter,
+  ) {
     return ChoiceChip(
       label: Text(label),
-      selected: isSelected,
+      selected: provider.dateFilter == filter,
       onSelected: (_) => provider.setDateFilter(filter),
-      selectedColor: Colors.indigo,
-      labelStyle: TextStyle(
-        color: isSelected ? Colors.white : Colors.black87,
-        fontSize: SizeConfig.setSp(12),
-      ),
     );
   }
 
-  void _showBackupDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Data Backup & Restore'),
-        content: const Text('Keep your data safe by exporting a backup file or restore from a previous one.'),
-        actions: [
-          ListTile(
-            leading: const Icon(Icons.share, color: Colors.indigo),
-            title: const Text('Export Backup'),
-            subtitle: const Text('Share backup file to WhatsApp/Email'),
-            onTap: () async {
-              Navigator.pop(context);
-              final success = await context.read<TransactionProvider>().exportData();
-              if (success && context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Backup exported successfully!')),
-                );
-              }
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.upload_file, color: Colors.orange),
-            title: const Text('Restore from Backup'),
-            subtitle: const Text('Upload a previously saved .json file'),
-            onTap: () async {
-              Navigator.pop(context);
-              final success = await context.read<TransactionProvider>().importData();
-              if (success && context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Data restored successfully!')),
-                );
-              } else if (context.mounted && context.read<TransactionProvider>().errorMessage != null) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(context.read<TransactionProvider>().errorMessage!)),
-                );
-              }
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.delete_forever, color: Colors.red),
-            title: const Text('Delete All Data', style: TextStyle(color: Colors.red)),
-            subtitle: const Text('Wipe all transactions and customers'),
-            onTap: () {
-              Navigator.pop(context);
-              _showDeleteConfirmation(context);
-            },
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _buildSummaryCard(
+    BuildContext context,
+    TransactionProvider provider,
+    NumberFormat format,
+    StatusColors statusColors,
+  ) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
-  void _showDeleteConfirmation(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Confirm Deletion'),
-        content: const Text('Are you sure you want to permanently delete all your data? This action cannot be undone.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              final success = await context.read<TransactionProvider>().deleteAllData();
-              if (success && context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('All data has been wiped.')),
-                );
-              }
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
-            child: const Text('Delete Everything'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSummaryCard(BuildContext context, TransactionProvider provider, NumberFormat format) {
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.all(SizeConfig.blockWidth(5)),
-      decoration: const BoxDecoration(
-        color: Colors.indigo,
-        borderRadius: BorderRadius.only(
+      padding: EdgeInsets.all(5.w),
+      decoration: BoxDecoration(
+        gradient: statusColors.dashboardGradient,
+        borderRadius: const BorderRadius.only(
           bottomLeft: Radius.circular(32),
           bottomRight: Radius.circular(32),
         ),
+        boxShadow: isDark
+            ? null
+            : [
+                BoxShadow(
+                  color: theme.colorScheme.primary.withValues(alpha: 0.3),
+                  blurRadius: 15,
+                  offset: const Offset(0, 8),
+                ),
+              ],
       ),
       child: Column(
         children: [
-          Text(
-            'Cash in Hand',
-            style: TextStyle(color: Colors.white70, fontSize: SizeConfig.setSp(14)),
-          ),
-          SizedBox(height: SizeConfig.blockHeight(0.5)),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              format.format(provider.cashBalance),
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: SizeConfig.setSp(36),
-                fontWeight: FontWeight.bold,
-              ),
+          const Text('Cash in Hand', style: TextStyle(color: Colors.white70)),
+          SizedBox(height: 0.5.h),
+          ResponsiveValueText(
+            amount: provider.cashBalance,
+            label: 'Cash in Hand',
+            compactByDefault: false,
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 36.sp,
+              fontWeight: FontWeight.bold,
             ),
           ),
-          SizedBox(height: SizeConfig.blockHeight(3)),
+          SizedBox(height: 3.h),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildSmallSummary('Sales', provider.totalSales, Colors.greenAccent, format),
-              _buildSmallSummary('Expenses', provider.totalExpenses, Colors.redAccent.shade100, format),
-              _buildSmallSummary('Debt', provider.totalDebts, Colors.orangeAccent, format),
+              _buildSmallSummary(
+                'Sales',
+                provider.totalSales,
+                statusColors.onDashboardInflow!,
+                format,
+              ),
+              _buildSmallSummary(
+                'Expenses',
+                provider.totalExpenses,
+                statusColors.onDashboardOutflow!,
+                format,
+              ),
+              _buildSmallSummary(
+                'Debt',
+                provider.totalDebts,
+                statusColors.onDashboardDebt!,
+                format,
+              ),
             ],
           ),
-          SizedBox(height: SizeConfig.blockHeight(1)),
+          SizedBox(height: 1.h),
         ],
       ),
     );
   }
 
-  Widget _buildSmallSummary(String label, double amount, Color color, NumberFormat format) {
+  Widget _buildSmallSummary(
+    String label,
+    double amount,
+    Color color,
+    NumberFormat format,
+  ) {
     return Column(
       children: [
-        Text(label, style: TextStyle(color: Colors.white70, fontSize: SizeConfig.setSp(12))),
-        SizedBox(height: SizeConfig.blockHeight(0.5)),
         Text(
-          format.format(amount),
-          style: TextStyle(color: color, fontSize: SizeConfig.setSp(15), fontWeight: FontWeight.bold),
+          label,
+          style: TextStyle(color: Colors.white70, fontSize: 12.sp),
+        ),
+        SizedBox(height: 0.5.h),
+        ResponsiveValueText(
+          amount: amount,
+          label: label,
+          style: TextStyle(
+            color: color,
+            fontSize: 15.sp,
+            fontWeight: FontWeight.bold,
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildQuickActions(BuildContext context) {
+  Widget _buildQuickActions(BuildContext context, ThemeData theme) {
     return Padding(
-      padding: EdgeInsets.all(SizeConfig.blockWidth(4)),
+      padding: EdgeInsets.all(4.w),
       child: Row(
         children: [
           Expanded(
             child: ElevatedButton.icon(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const AddTransactionScreen()),
-                );
-              },
-              icon: Icon(Icons.add, size: SizeConfig.setSp(20)),
-              label: Text('Add Transaction', style: TextStyle(fontSize: SizeConfig.setSp(14))),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.indigo,
-                foregroundColor: Colors.white,
-                padding: EdgeInsets.symmetric(vertical: SizeConfig.blockHeight(1.5)),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const AddTransactionScreen(),
+                ),
               ),
+              icon: const Icon(Icons.add),
+              label: const Text('Add Transaction'),
             ),
           ),
-          SizedBox(width: SizeConfig.blockWidth(3)),
+          SizedBox(width: 3.w),
           Expanded(
             child: OutlinedButton.icon(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const DebtLedgerScreen()),
-                );
-              },
-              icon: Icon(Icons.menu_book, size: SizeConfig.setSp(20)),
-              label: Text('Debt Ledger', style: TextStyle(fontSize: SizeConfig.setSp(14))),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.indigo,
-                side: const BorderSide(color: Colors.indigo),
-                padding: EdgeInsets.symmetric(vertical: SizeConfig.blockHeight(1.5)),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const DebtLedgerScreen(),
+                ),
               ),
+              icon: const Icon(Icons.menu_book),
+              label: const Text('Debt Ledger'),
             ),
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildTransactionList(TransactionProvider provider, NumberFormat format) {
-    final list = provider.transactions;
+class HomeTransactionHistoryList extends StatefulWidget {
+  final List<dynamic> transactions;
+  final NumberFormat currencyFormat;
+  final StatusColors statusColors;
 
-    if (list.isEmpty) {
-      String message = 'No transactions found.';
-      IconData icon = Icons.receipt_long;
+  // ignore: use_super_parameters
+  const HomeTransactionHistoryList({
+    // ignore: strict_top_level_inference
+    key,
+    required this.transactions,
+    required this.currencyFormat,
+    required this.statusColors,
+  }) : super(key: key);
 
-      if (provider.dateFilter == TransactionDateFilter.today) {
-        message = 'No transactions recorded yet today.';
-        icon = Icons.today;
-      }
+  @override
+  State<HomeTransactionHistoryList> createState() =>
+      _HomeTransactionHistoryListState();
+}
 
-      switch (provider.typeFilter) {
-        case TransactionTypeFilter.sales:
-          message = 'No sales recorded for this period.';
-          icon = Icons.trending_up;
-          break;
-        case TransactionTypeFilter.expenses:
-          message = 'No expenses recorded for this period.';
-          icon = Icons.trending_down;
-          break;
-        case TransactionTypeFilter.debts:
-          message = 'No credit or payment transactions.';
-          icon = Icons.people_outline;
-          break;
-        default:
-          break;
-      }
+class _HomeTransactionHistoryListState
+    extends State<HomeTransactionHistoryList> {
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
 
-      return Container(
-        padding: EdgeInsets.symmetric(vertical: SizeConfig.blockHeight(5)),
-        alignment: Alignment.center,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: SizeConfig.blockWidth(15), color: Colors.grey.shade300),
-            SizedBox(height: SizeConfig.blockHeight(2)),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey.shade500, fontSize: SizeConfig.setSp(16)),
-            ),
-            SizedBox(height: SizeConfig.blockHeight(1)),
-            TextButton(
-              onPressed: () {
-                provider.setTypeFilter(TransactionTypeFilter.all);
-                provider.setDateFilter(TransactionDateFilter.allTime);
-              },
-              child: const Text('Clear All Filters'),
-            ),
-          ],
+    if (widget.transactions.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 8.h),
+          child: Column(
+            children: [
+              Icon(
+                Icons.receipt_long_outlined,
+                size: 12.w,
+                color: theme.dividerTheme.color,
+              ),
+              SizedBox(height: 2.h),
+              Text(
+                'No transactions found.',
+                style: TextStyle(
+                  color: theme.textTheme.bodyMedium?.color?.withValues(
+                    alpha: 0.5,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -360,61 +352,107 @@ class HomeScreen extends StatelessWidget {
     return ListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      itemCount: list.length,
-      padding: EdgeInsets.symmetric(horizontal: SizeConfig.blockWidth(4)),
+      itemCount: widget.transactions.length > 10
+          ? 10
+          : widget.transactions.length,
+      padding: EdgeInsets.symmetric(horizontal: 4.w),
       itemBuilder: (context, index) {
-        final tx = list[index];
+        final tx = widget.transactions[index];
+
         final isOutflow = tx.transactionType == 'OUTFLOW';
         final isPayment = tx.transactionType == 'PAYMENT';
-        
+
         bool isCashOut = isOutflow;
         if (isPayment && tx.customer.value != null) {
           isCashOut = tx.customer.value!.relationType == 'CREDITOR';
         }
 
-        Color amountColor = isCashOut ? Colors.red : Colors.green;
-        String prefix = isCashOut ? '- ' : '+ ';
-        
-        if (tx.isCredit) {
-           amountColor = Colors.orange.shade700;
-           prefix = ''; 
-        }
+        Color amountColor = isCashOut
+            ? widget.statusColors.outflow!
+            : widget.statusColors.inflow!;
+        if (tx.isCredit) amountColor = widget.statusColors.debt!;
 
         return Card(
-          margin: EdgeInsets.only(bottom: SizeConfig.blockHeight(1.5)),
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-            side: BorderSide(color: Colors.grey.shade200),
-          ),
+          margin: EdgeInsets.only(bottom: 1.5.h),
           child: ListTile(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) =>
+                      GlobalHistoryScreen(scrollToTransactionId: tx.id),
+                ),
+              );
+            },
             leading: CircleAvatar(
               backgroundColor: amountColor.withValues(alpha: 0.1),
               child: Icon(
                 isCashOut ? Icons.arrow_upward : Icons.arrow_downward,
                 color: amountColor,
-                size: SizeConfig.setSp(20),
+                size: 20,
               ),
             ),
             title: Text(
-              tx.remarks?.isNotEmpty == true ? tx.remarks! : (isPayment ? 'Debt Payment' : (isOutflow ? 'Expense' : 'Sale')),
-              style: TextStyle(fontWeight: FontWeight.w600, fontSize: SizeConfig.setSp(14)),
+              tx.remarks?.isNotEmpty == true
+                  ? tx.remarks!
+                  : (isPayment
+                        ? 'Debt Payment'
+                        : (isOutflow ? 'Expense' : 'Sale')),
+              style: const TextStyle(fontWeight: FontWeight.w600),
             ),
             subtitle: Text(
-              '${DateFormat('MMM dd • hh:mm a').format(tx.timestamp)}${tx.isCredit ? ' (Credit)' : ''}',
-              style: TextStyle(fontSize: SizeConfig.setSp(12)),
+              DateFormat('MMM dd • hh:mm a').format(tx.timestamp),
+              style: TextStyle(fontSize: 12.sp),
             ),
-            trailing: Text(
-              prefix + format.format(tx.amount),
-              style: TextStyle(
-                color: amountColor,
-                fontWeight: FontWeight.bold,
-                fontSize: SizeConfig.setSp(15),
-              ),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  (isCashOut ? '- ' : '+ ') +
+                      widget.currencyFormat.format(tx.amount),
+                  style: TextStyle(
+                    color: amountColor,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15.sp,
+                  ),
+                ),
+                SizedBox(width: 2.w),
+                Icon(
+                  Icons.chevron_right,
+                  size: 16.sp,
+                  color: theme.hintColor,
+                ),
+              ],
             ),
           ),
         );
       },
+    );
+  }
+}
+
+class WelcomeScreen extends StatelessWidget {
+  const WelcomeScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Automatically flips matching light or dark system styles seamlessly
+            AdaptiveBrandLogo(width: 50.w, height: 50.w),
+            SizedBox(height: 2.h),
+            Text(
+              'Sivvai Bookkeeper',
+              style: Theme.of(
+                context,
+              ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -4,34 +4,73 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
 import '../providers/transaction_provider.dart';
+import '../providers/theme_provider.dart';
 import '../models/local_customer.dart';
 import '../widgets/repayment_dialog.dart';
 import '../utils/size_config.dart';
 import 'customer_transactions_screen.dart';
+import 'global_history_screen.dart';
+import 'manage_contacts_screen.dart';
 
 class DebtLedgerScreen extends StatelessWidget {
   const DebtLedgerScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    SizeConfig().init(context);
+    SizeConfig.init(context);
+    final theme = Theme.of(context);
+    final statusColors = theme.extension<StatusColors>()!;
     final currencyFormat = NumberFormat.currency(symbol: '₦', decimalDigits: 2);
 
     return DefaultTabController(
       length: 2,
       child: Scaffold(
-        backgroundColor: const Color(0xFFF8F9FA),
+        backgroundColor: theme.scaffoldBackgroundColor,
         appBar: AppBar(
-          title: Text('Ledger Management', 
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20.sp)),
-          backgroundColor: Colors.indigo.shade800,
-          foregroundColor: Colors.white,
-          elevation: 0,
+          title: Text('Ledger Management',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20.sp)),
+          actions: [
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert, color: Colors.white),
+              onSelected: (value) {
+                if (value == 'history') {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const GlobalHistoryScreen()),
+                  );
+                } else if (value == 'contacts') {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const ManageContactsScreen()),
+                  );
+                }
+              },
+              itemBuilder: (BuildContext context) => [
+                const PopupMenuItem(
+                  value: 'history',
+                  child: Row(
+                    children: [
+                      Icon(Icons.history, color: Colors.black54),
+                      SizedBox(width: 8),
+                      Text('View Global History'),
+                    ],
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'contacts',
+                  child: Row(
+                    children: [
+                      Icon(Icons.people_outline, color: Colors.black54),
+                      SizedBox(width: 8),
+                      Text('Manage Contacts'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
           bottom: TabBar(
-            indicatorColor: Colors.white,
-            indicatorWeight: 4,
-            labelStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 16.sp),
-            unselectedLabelStyle: TextStyle(fontWeight: FontWeight.normal, fontSize: 14.sp),
+            indicatorColor: theme.tabBarTheme.indicatorColor,
             tabs: const [
               Tab(text: 'Money to Collect'),
               Tab(text: 'Money to Pay'),
@@ -42,8 +81,8 @@ class DebtLedgerScreen extends StatelessWidget {
           builder: (context, provider, child) {
             return TabBarView(
               children: [
-                _buildDebtorTab(context, provider, currencyFormat),
-                _buildCreditorTab(context, provider, currencyFormat),
+                _buildDebtorTab(context, provider, currencyFormat, statusColors),
+                _buildCreditorTab(context, provider, currencyFormat, statusColors),
               ],
             );
           },
@@ -52,87 +91,77 @@ class DebtLedgerScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildDebtorTab(BuildContext context, TransactionProvider provider, NumberFormat format) {
-    final debtors = provider.debtors;
+  Widget _buildDebtorTab(BuildContext context, TransactionProvider provider, NumberFormat format, StatusColors status) {
     return Column(
       children: [
-        _buildSummaryHeader(
-          'Total Owed to You', 
-          provider.totalOwedToYou, 
-          Colors.amber.shade800, 
-          Colors.green.shade700,
-          format,
-          Icons.arrow_downward,
-        ),
+        _buildSummaryHeader('Total Owed to You', provider.totalOwedToYou, status.debt!, status.inflowGradient!, Icons.arrow_downward),
         Expanded(
-          child: debtors.isEmpty
-              ? _buildEmptyState('No debtors found.', Icons.check_circle_outline, Colors.green)
-              : _buildContactList(context, debtors, Colors.amber.shade800, format),
+          child: provider.debtors.isEmpty
+              ? _buildEmptyState(context, 'No debtors found.', Icons.check_circle_outline, status.inflow!)
+              : _buildContactList(context, provider.debtors, status.debt!, format),
         ),
       ],
     );
   }
 
-  Widget _buildCreditorTab(BuildContext context, TransactionProvider provider, NumberFormat format) {
-    final creditors = provider.creditors;
+  Widget _buildCreditorTab(BuildContext context, TransactionProvider provider, NumberFormat format, StatusColors status) {
     return Column(
       children: [
-        _buildSummaryHeader(
-          'Total You Owe', 
-          provider.totalYouOwe, 
-          const Color(0xFFDC143C), // Crimson
-          Colors.red.shade800,
-          format,
-          Icons.arrow_upward,
-        ),
+        _buildSummaryHeader('Total You Owe', provider.totalYouOwe, status.outflow!, status.outflowGradient!, Icons.arrow_upward),
         Expanded(
-          child: creditors.isEmpty
-              ? _buildEmptyState('No creditors found.', Icons.thumb_up_alt_outlined, Colors.blue)
-              : _buildContactList(context, creditors, const Color(0xFFDC143C), format),
+          child: provider.creditors.isEmpty
+              ? _buildEmptyState(context, 'No creditors found.', Icons.thumb_up_alt_outlined, status.inflow!)
+              : _buildContactList(context, provider.creditors, status.outflow!, format),
         ),
       ],
     );
   }
 
-  Widget _buildSummaryHeader(String label, double amount, Color primaryColor, Color secondaryColor, NumberFormat format, IconData icon) {
+  Widget _buildSummaryHeader(String label, double amount, Color accent, Gradient gradient, IconData icon) {
     return Container(
       width: double.infinity,
       padding: EdgeInsets.symmetric(vertical: 4.h, horizontal: 6.w),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [primaryColor.withValues(alpha: 0.1), secondaryColor.withValues(alpha: 0.05)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+        gradient: gradient,
+        borderRadius: const BorderRadius.only(
+          bottomLeft: Radius.circular(24),
+          bottomRight: Radius.circular(24),
         ),
-        border: Border(bottom: BorderSide(color: primaryColor.withValues(alpha: 0.2), width: 1)),
+        boxShadow: [
+          BoxShadow(
+            color: accent.withValues(alpha: 0.2),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
       ),
       child: Column(
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 16.sp, color: primaryColor),
+              Icon(icon, size: 16.sp, color: Colors.white70),
               SizedBox(width: 2.w),
               Text(
                 label.toUpperCase(),
                 style: TextStyle(
                   fontSize: 12.sp, 
-                  color: primaryColor, 
+                  color: Colors.white70, 
                   fontWeight: FontWeight.w800,
                   letterSpacing: 1.2,
                 ),
               ),
             ],
           ),
-          SizedBox(height: 1.5.h),
+          SizedBox(height: 1.h),
           FittedBox(
             fit: BoxFit.scaleDown,
             child: Text(
-              format.format(amount),
+              SizeConfig.formatCompactCurrency(amount),
               style: TextStyle(
-                fontSize: 36.sp,
+                fontSize: 32.sp,
                 fontWeight: FontWeight.w900,
-                color: primaryColor,
+                color: Colors.white,
                 letterSpacing: -0.5,
               ),
             ),
@@ -142,7 +171,8 @@ class DebtLedgerScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildEmptyState(String message, IconData icon, Color color) {
+  Widget _buildEmptyState(BuildContext context, String message, IconData icon, Color color) {
+    final theme = Theme.of(context);
     return Center(
       child: SingleChildScrollView(
         child: Column(
@@ -159,7 +189,7 @@ class DebtLedgerScreen extends StatelessWidget {
             SizedBox(height: 3.h),
             Text(
               message,
-              style: TextStyle(fontSize: 16.sp, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
+              style: TextStyle(fontSize: 16.sp, color: theme.textTheme.bodyMedium?.color, fontWeight: FontWeight.w500),
             ),
           ],
         ),
@@ -167,110 +197,67 @@ class DebtLedgerScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildContactList(BuildContext context, List<LocalCustomer> contacts, Color accentColor, NumberFormat format) {
+  Widget _buildContactList(BuildContext context, List<LocalCustomer> contacts, Color accent, NumberFormat format) {
+    final theme = Theme.of(context);
     return ListView.separated(
-      padding: EdgeInsets.all(4.w),
+      padding: EdgeInsets.fromLTRB(4.w, 3.h, 4.w, 4.h),
       itemCount: contacts.length,
       separatorBuilder: (context, index) => SizedBox(height: 1.5.h),
       itemBuilder: (context, index) {
         final customer = contacts[index];
         return Card(
-          elevation: 0,
-          margin: EdgeInsets.zero,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(4.w),
-            side: BorderSide(color: Colors.grey.shade200),
-          ),
           child: InkWell(
             onTap: () => _showContactOptions(context, customer, format),
-            borderRadius: BorderRadius.circular(4.w),
+            borderRadius: BorderRadius.circular(16),
             child: Padding(
               padding: EdgeInsets.all(4.w),
               child: Row(
                 children: [
                   CircleAvatar(
                     radius: 6.w,
-                    backgroundColor: accentColor.withValues(alpha: 0.1),
+                    backgroundColor: accent.withValues(alpha: 0.1),
                     child: Text(
                       customer.fullName[0].toUpperCase(),
-                      style: TextStyle(color: accentColor, fontWeight: FontWeight.bold, fontSize: 18.sp),
+                      style: TextStyle(color: accent, fontWeight: FontWeight.bold, fontSize: 18.sp),
                     ),
                   ),
                   SizedBox(width: 4.w),
                   Expanded(
-                    flex: 3,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
                           customer.fullName,
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16.sp),
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16.sp, color: theme.textTheme.bodyLarge?.color),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                         SizedBox(height: 0.5.h),
                         Row(
                           children: [
-                            Icon(Icons.phone_outlined, size: 12.sp, color: Colors.grey.shade600),
+                            Icon(Icons.phone_outlined, size: 12.sp, color: theme.textTheme.bodyMedium?.color),
                             SizedBox(width: 1.w),
-                            Expanded(
-                              child: Text(
-                                customer.phoneNumber?.isNotEmpty == true ? customer.phoneNumber! : 'No phone',
-                                style: TextStyle(color: Colors.grey.shade600, fontSize: 12.sp),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
+                            Text(
+                              customer.phoneNumber?.isNotEmpty == true ? customer.phoneNumber! : 'No phone',
+                              style: TextStyle(color: theme.textTheme.bodyMedium?.color, fontSize: 12.sp),
                             ),
                           ],
                         ),
                       ],
                     ),
                   ),
-                  SizedBox(width: 2.w),
-                  Flexible(
-                    flex: 2,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Flexible(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              FittedBox(
-                                fit: BoxFit.scaleDown,
-                                child: Text(
-                                  format.format(customer.totalDebtAmount),
-                                  style: TextStyle(
-                                    color: accentColor,
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: 16.sp,
-                                  ),
-                                ),
-                              ),
-                              Text(
-                                'BALANCE',
-                                style: TextStyle(
-                                  color: Colors.grey.shade400,
-                                  fontSize: 10.sp,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        SizedBox(width: 2.w),
-                        IconButton(
-                          icon: Icon(Icons.check_circle_outline, color: accentColor, size: 24.sp),
-                          onPressed: () => _showRepaymentDialog(context, customer),
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                          tooltip: 'Settle',
-                        ),
-                      ],
-                    ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        SizeConfig.formatCompactCurrency(customer.totalDebtAmount),
+                        style: TextStyle(color: accent, fontWeight: FontWeight.w900, fontSize: 16.sp),
+                      ),
+                      Text(
+                        'BALANCE',
+                        style: TextStyle(color: theme.textTheme.bodyMedium?.color?.withValues(alpha: .4), fontSize: 10.sp, fontWeight: FontWeight.bold),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -281,156 +268,146 @@ class DebtLedgerScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _showRepaymentDialog(BuildContext context, LocalCustomer customer) async {
-    final format = NumberFormat.currency(symbol: '₦', decimalDigits: 2);
-    final amount = await showDialog<double>(
-      context: context,
-      builder: (context) => RepaymentDialog(customer: customer),
-    );
-
-    if (amount != null && amount > 0 && context.mounted) {
-      await context.read<TransactionProvider>().settleLedgerBalance(
-        customerId: customer.id,
-        amountPaid: amount,
-        isCreditor: customer.relationType == 'CREDITOR',
-      );
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${format.format(amount)} repayment recorded successfully'),
-            backgroundColor: Colors.green.shade700,
-          ),
-        );
-      }
-    }
-  }
-
   void _showContactOptions(BuildContext context, LocalCustomer customer, NumberFormat format) {
+    final theme = Theme.of(context);
+    final status = theme.extension<StatusColors>()!;
+    final isDebtor = customer.relationType == 'DEBTOR';
+    final accent = isDebtor ? status.debt! : status.outflow!;
+    
     showModalBottomSheet(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        bool isDebtor = customer.relationType == 'DEBTOR';
-        Color accent = isDebtor ? Colors.amber.shade800 : const Color(0xFFDC143C);
-        
-        return Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-          ),
-          padding: EdgeInsets.fromLTRB(
-            8.w,
-            2.h,
-            8.w,
-            4.h + MediaQuery.of(context).viewInsets.bottom,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 10.w,
-                height: 0.5.h,
-                margin: EdgeInsets.only(bottom: 3.h),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(2),
-                ),
+      builder: (bottomSheetContext) => Container(
+        padding: EdgeInsets.fromLTRB(6.w, 2.h, 6.w, 4.h),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(width: 10.w, height: 4, margin: EdgeInsets.only(bottom: 2.h), decoration: BoxDecoration(color: theme.dividerColor, borderRadius: BorderRadius.circular(2))),
+            Text(customer.fullName, style: TextStyle(fontSize: 22.sp, fontWeight: FontWeight.bold)),
+            SizedBox(height: 1.h),
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 0.8.h),
+              decoration: BoxDecoration(color: accent.withValues(alpha: .1), borderRadius: BorderRadius.circular(20)),
+              child: Text(
+                '${isDebtor ? "Owed to you" : "You owe"}: ${SizeConfig.formatCompactCurrency(customer.totalDebtAmount)}',
+                style: TextStyle(fontSize: 14.sp, color: accent, fontWeight: FontWeight.bold),
               ),
-              Text(
-                customer.fullName,
-                style: TextStyle(fontSize: 24.sp, fontWeight: FontWeight.bold),
-              ),
-              SizedBox(height: 1.h),
-              Container(
-                padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 1.h),
-                decoration: BoxDecoration(
-                  color: accent.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  '${isDebtor ? "Owed to you" : "You owe"}: ${format.format(customer.totalDebtAmount)}',
-                  style: TextStyle(
-                    fontSize: 16.sp, 
-                    color: accent, 
-                    fontWeight: FontWeight.bold
-                  ),
-                ),
-              ),
-              SizedBox(height: 4.h),
-              _buildOptionTile(
-                icon: Icons.payments_outlined,
-                title: 'Settle Balance',
-                color: accent,
-                onTap: () {
-                  Navigator.pop(context);
-                  _showRepaymentDialog(context, customer);
-                },
-              ),
-              _buildOptionTile(
-                icon: Icons.history,
-                title: 'Transaction History',
-                color: Colors.indigo,
-                onTap: () {
-                  Navigator.pop(context);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => CustomerTransactionsScreen(customer: customer)),
-                  );
-                },
-              ),
-              if (isDebtor) 
-                _buildOptionTile(
-                  icon: Icons.message_outlined,
-                  title: 'Send WhatsApp Reminder',
-                  color: const Color(0xFF25D366),
-                  onTap: () {
-                    Navigator.pop(context);
-                    _shareReminder(customer, format);
-                  },
-                ),
-              SizedBox(height: 2.h),
-              SizedBox(
-                width: double.infinity,
-                child: TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: Text('Close', style: TextStyle(color: Colors.grey.shade600, fontWeight: FontWeight.bold, fontSize: 16.sp)),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
+            ),
+            SizedBox(height: 3.h),
+            _buildOptionTile(bottomSheetContext, Icons.payments_outlined, 'Settle Balance', accent, () {
+              Navigator.pop(bottomSheetContext);
+              _showRepaymentDialog(context, customer);
+            }),
+            _buildOptionTile(bottomSheetContext, Icons.history, 'Transaction History', theme.colorScheme.primary, () {
+              Navigator.pop(bottomSheetContext);
+              Navigator.push(context, MaterialPageRoute(builder: (context) => CustomerTransactionsScreen(customer: customer)));
+            }),
+            _buildOptionTile(bottomSheetContext, Icons.edit_outlined, 'Edit Contact', Colors.blue, () {
+              Navigator.pop(bottomSheetContext);
+              _showEditDialog(context, customer);
+            }),
+            _buildOptionTile(bottomSheetContext, Icons.delete_outline, 'Delete Contact', Colors.red, () {
+              Navigator.pop(bottomSheetContext);
+              _confirmDelete(context, customer);
+            }),
+            if (isDebtor) _buildOptionTile(bottomSheetContext, Icons.message, 'Send WhatsApp Reminder', const Color(0xFF25D366), () {
+              Navigator.pop(bottomSheetContext);
+              _shareReminder(customer, format);
+            }),
+          ],
+        ),
+      ),
     );
   }
 
-  Widget _buildOptionTile({required IconData icon, required String title, required Color color, required VoidCallback onTap}) {
+  Widget _buildOptionTile(BuildContext context, IconData icon, String title, Color color, VoidCallback onTap) {
+    final theme = Theme.of(context);
     return ListTile(
-      leading: Container(
-        padding: EdgeInsets.all(2.w),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Icon(icon, color: color, size: 24.sp),
-      ),
-      title: Text(title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16.sp)),
-      trailing: Icon(Icons.chevron_right, size: 16.sp),
+      leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: color.withValues(alpha: .1), borderRadius: BorderRadius.circular(10)), child: Icon(icon, color: color)),
+      title: Text(title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16.sp, color: theme.textTheme.bodyLarge?.color)),
+      trailing: const Icon(Icons.chevron_right, size: 18),
       onTap: onTap,
     );
   }
 
-  void _shareReminder(LocalCustomer customer, NumberFormat format) async {
-    const storeName = "the merchant"; 
-    final message = "Hello ${customer.fullName}, this is a friendly reminder regarding your outstanding balance of ${format.format(customer.totalDebtAmount)} with $storeName. Kindly make arrangements for payment. Thank you!";
-    
-    if (customer.phoneNumber?.isNotEmpty == true) {
-      final whatsappUrl = Uri.parse("whatsapp://send?phone=${customer.phoneNumber}&text=${Uri.encodeComponent(message)}");
-      if (await canLaunchUrl(whatsappUrl)) {
-        await launchUrl(whatsappUrl);
-        return;
-      }
+  Future<void> _showRepaymentDialog(BuildContext context, LocalCustomer customer) async {
+    final amount = await showDialog<double>(context: context, builder: (context) => RepaymentDialog(customer: customer));
+    if (amount != null && amount > 0 && context.mounted) {
+      await context.read<TransactionProvider>().settleLedgerBalance(customerId: customer.id, amountPaid: amount, isCreditor: customer.relationType == 'CREDITOR');
     }
-    Share.share(message, subject: 'Payment Reminder');
+  }
+
+  void _confirmDelete(BuildContext context, LocalCustomer customer) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Contact?'),
+        content: const Text(
+            'This will remove the contact profile but keep all transaction history for accounting accuracy.'
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () async {
+              final provider = context.read<TransactionProvider>();
+              await provider.deleteCustomer(customer.id);
+              if (ctx.mounted) Navigator.pop(ctx);
+            },
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEditDialog(BuildContext context, LocalCustomer customer) {
+    final nameController = TextEditingController(text: customer.fullName);
+    final phoneController = TextEditingController(text: customer.phoneNumber ?? '');
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Edit Contact'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(labelText: 'Full Name'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: phoneController,
+              decoration: const InputDecoration(labelText: 'Phone Number (Optional)'),
+              keyboardType: TextInputType.phone,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () async {
+              if (nameController.text.trim().isNotEmpty) {
+                customer.fullName = nameController.text.trim();
+                customer.phoneNumber = phoneController.text.trim();
+                final provider = context.read<TransactionProvider>();
+                await provider.updateCustomer(customer);
+                await provider.refreshData();
+                if (ctx.mounted) Navigator.pop(ctx);
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _shareReminder(LocalCustomer customer, NumberFormat format) async {
+    final message = "Hello ${customer.fullName}, just a friendly reminder regarding your outstanding balance of ${format.format(customer.totalDebtAmount)}. Thank you!";
+    if (customer.phoneNumber?.isNotEmpty == true) {
+      final url = Uri.parse("whatsapp://send?phone=${customer.phoneNumber}&text=${Uri.encodeComponent(message)}");
+      if (await canLaunchUrl(url)) { await launchUrl(url); return; }
+    }
+    Share.share(message);
   }
 }

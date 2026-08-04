@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:isar/isar.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:file_picker/file_picker.dart';
 import '../models/local_customer.dart';
@@ -43,7 +44,7 @@ class TransactionProvider with ChangeNotifier {
         return t.transactionType == 'OUTFLOW' && !t.isCredit;
       }
       if (_typeFilter == TransactionTypeFilter.debts) {
-        return t.isCredit || t.transactionType == 'PAYMENT';
+        return t.isCredit || t.transactionType.startsWith('PAYMENT');
       }
       return true;
     }).toList();
@@ -55,47 +56,39 @@ class TransactionProvider with ChangeNotifier {
   TransactionTypeFilter get typeFilter => _typeFilter;
   TransactionDateFilter get dateFilter => _dateFilter;
 
+  /// Expose direct streams for high-performance reactive UI binding
+  Stream<List<LocalTransaction>> watchTransactions() =>
+      _dbService.watchTransactions();
+  Stream<List<LocalCustomer>> watchCustomers() => _dbService.watchCustomers();
+
+  // Cached Aggregate State
+  double _totalLiquidCash = 0.0;
+  double _totalSales = 0.0;
+  double _totalExpenses = 0.0;
+
   // --- Refactored Financial Logic (Strict Rules) ---
 
-  /// Total Liquid Cash = (Cash Inflows + Payments Received) - (Cash Outflows + Payments Paid)
-  /// Crucial: Credit transactions do NOT affect liquid cash.
-  double get totalLiquidCash {
-    double cashIn = _allTransactions
-        .where((t) => (t.transactionType == 'INFLOW' && !t.isCredit) || (t.transactionType == 'PAYMENT' && _isPaymentReceived(t)))
-        .fold(0.0, (sum, t) => sum + t.amount);
-    
-    double cashOut = _allTransactions
-        .where((t) => (t.transactionType == 'OUTFLOW' && !t.isCredit) || (t.transactionType == 'PAYMENT' && !_isPaymentReceived(t)))
-        .fold(0.0, (sum, t) => sum + t.amount);
-        
-    return cashIn - cashOut;
-  }
+  double get totalLiquidCash => _totalLiquidCash;
 
-  bool _isPaymentReceived(LocalTransaction t) {
-    // Payment received is from a DEBTOR
-    // Payment paid is to a CREDITOR
-    // We need to check the linked customer's relationType
-    if (t.customer.value == null) return true; // Default to inflow if unknown
-    return t.customer.value!.relationType == 'DEBTOR';
-  }
-
-  /// Total amount owed TO the business (Debtors)
   double get totalOwedToYou => _customers
       .where((c) => c.relationType == 'DEBTOR')
       .fold(0.0, (sum, c) => sum + c.totalDebtAmount);
 
-  /// Total amount the business owes (Creditors)
   double get totalYouOwe => _customers
       .where((c) => c.relationType == 'CREDITOR')
       .fold(0.0, (sum, c) => sum + c.totalDebtAmount);
 
-  List<LocalCustomer> get debtors => _customers.where((c) => c.relationType == 'DEBTOR' && c.totalDebtAmount != 0).toList();
-  List<LocalCustomer> get creditors => _customers.where((c) => c.relationType == 'CREDITOR' && c.totalDebtAmount != 0).toList();
+  List<LocalCustomer> get debtors => _customers
+      .where((c) => c.relationType == 'DEBTOR' && c.totalDebtAmount != 0)
+      .toList();
+  List<LocalCustomer> get creditors => _customers
+      .where((c) => c.relationType == 'CREDITOR' && c.totalDebtAmount != 0)
+      .toList();
 
   // Legacy compatibility for Dashboard
   double get cashBalance => totalLiquidCash;
-  double get totalSales => _allTransactions.where((t) => t.transactionType == 'INFLOW').fold(0.0, (sum, t) => sum + t.amount);
-  double get totalExpenses => _allTransactions.where((t) => t.transactionType == 'OUTFLOW').fold(0.0, (sum, t) => sum + t.amount);
+  double get totalSales => _totalSales;
+  double get totalExpenses => _totalExpenses;
   double get totalDebts => totalOwedToYou;
 
   // --- Filter Actions ---
@@ -107,6 +100,10 @@ class TransactionProvider with ChangeNotifier {
 
   void setDateFilter(TransactionDateFilter filter) {
     _dateFilter = filter;
+    _updateTransactionStream();
+  }
+
+  Future<void> refreshData() async {
     _updateTransactionStream();
   }
 
@@ -136,13 +133,77 @@ class TransactionProvider with ChangeNotifier {
       start = DateTime(now.year, now.month, 1);
     }
 
-    _transactionSubscription = _dbService.watchTransactions(start: start).listen((data) {
-      // Load links for every transaction to ensure relationType is available for cash logic
-      Future.wait(data.map((t) => t.customer.load())).then((_) {
-        _allTransactions = data;
-        notifyListeners();
-      });
-    });
+    _transactionSubscription = _dbService
+        .watchTransactions(start: start)
+        .listen((data) async {
+          // Eager load customer links for all transactions to prevent UI "popping"
+          for (var tx in data) {
+            if (!tx.customer.isLoaded) {
+              await tx.customer.load();
+            }
+          }
+          
+          _allTransactions = data;
+          await _calculateAggregatesAsync();
+          notifyListeners();
+        });
+  }
+
+  Future<void> _calculateAggregatesAsync() async {
+    final isar = DatabaseService.isar;
+
+    final sales = await isar.localTransactions
+        .filter()
+        .transactionTypeEqualTo('INFLOW')
+        .amountProperty()
+        .sum();
+    final expenses = await isar.localTransactions
+        .filter()
+        .transactionTypeEqualTo('OUTFLOW')
+        .amountProperty()
+        .sum();
+
+    final cashInflows = await isar.localTransactions
+        .filter()
+        .transactionTypeEqualTo('INFLOW')
+        .isCreditEqualTo(false)
+        .amountProperty()
+        .sum();
+    final cashOutflows = await isar.localTransactions
+        .filter()
+        .transactionTypeEqualTo('OUTFLOW')
+        .isCreditEqualTo(false)
+        .amountProperty()
+        .sum();
+
+    final payments = await isar.localTransactions
+        .filter()
+        .transactionTypeStartsWith('PAYMENT')
+        .findAll();
+    double paymentsReceived = 0.0;
+    double paymentsPaid = 0.0;
+
+    for (var p in payments) {
+      if (p.transactionType == 'PAYMENT_IN') {
+        paymentsReceived += p.amount;
+      } else if (p.transactionType == 'PAYMENT_OUT') {
+        paymentsPaid += p.amount;
+      } else {
+        // Fallback for unmigrated
+        await p.customer.load();
+        if (p.customer.value == null ||
+            p.customer.value!.relationType == 'DEBTOR') {
+          paymentsReceived += p.amount;
+        } else {
+          paymentsPaid += p.amount;
+        }
+      }
+    }
+
+    _totalSales = sales;
+    _totalExpenses = expenses;
+    _totalLiquidCash =
+        (cashInflows + paymentsReceived) - (cashOutflows + paymentsPaid);
   }
 
   // --- Database Actions ---
@@ -235,13 +296,43 @@ class TransactionProvider with ChangeNotifier {
     }
   }
 
-  Future<LocalCustomer?> addCustomer(String name, {String? phone, required String relationType}) async {
+  Future<LocalCustomer?> addCustomer(
+    String name, {
+    String? phone,
+    required String relationType,
+  }) async {
     _setLoading(true);
     try {
-      return await _dbService.addCustomer(name, phone: phone, relationType: relationType);
+      return await _dbService.addCustomer(
+        name,
+        phone: phone,
+        relationType: relationType,
+      );
     } catch (e) {
       _errorMessage = "Failed to add customer: ${e.toString()}";
       return null;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  Future<void> updateCustomer(LocalCustomer customer) async {
+    _setLoading(true);
+    try {
+      await _dbService.updateCustomer(customer);
+    } catch (e) {
+      _errorMessage = "Update customer failed: ${e.toString()}";
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  Future<void> deleteCustomer(int id) async {
+    _setLoading(true);
+    try {
+      await _dbService.deleteCustomer(id);
+    } catch (e) {
+      _errorMessage = "Delete customer failed: ${e.toString()}";
     } finally {
       _setLoading(false);
     }

@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/transaction_provider.dart';
+import '../providers/theme_provider.dart';
 import '../models/local_customer.dart';
 import '../models/local_transaction.dart';
 import '../utils/size_config.dart';
 
 class AddTransactionScreen extends StatefulWidget {
   final LocalTransaction? transaction;
-  
   const AddTransactionScreen({super.key, this.transaction});
 
   @override
@@ -17,11 +17,11 @@ class AddTransactionScreen extends StatefulWidget {
 class _AddTransactionScreenState extends State<AddTransactionScreen> {
   final _amountController = TextEditingController();
   final _remarksController = TextEditingController();
-  final _phoneController = TextEditingController();
   final _customerSearchController = TextEditingController();
-
-  late String _transactionType;
-  late bool _isCredit;
+  final _phoneController = TextEditingController();
+  
+  String _transactionType = 'INFLOW';
+  bool _isCredit = false;
   LocalCustomer? _selectedCustomer;
   bool _isNewCustomer = false;
 
@@ -33,20 +33,10 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       _remarksController.text = widget.transaction!.remarks ?? '';
       _transactionType = widget.transaction!.transactionType;
       _isCredit = widget.transaction!.isCredit;
-      
-      widget.transaction!.customer.load().then((_) {
-        if (mounted) {
-          setState(() {
-            _selectedCustomer = widget.transaction!.customer.value;
-            if (_selectedCustomer != null) {
-              _customerSearchController.text = _selectedCustomer!.fullName;
-            }
-          });
-        }
-      });
-    } else {
-      _transactionType = 'INFLOW';
-      _isCredit = false;
+      if (widget.transaction!.customer.value != null) {
+        _selectedCustomer = widget.transaction!.customer.value;
+        _customerSearchController.text = _selectedCustomer!.fullName;
+      }
     }
   }
 
@@ -54,43 +44,142 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   void dispose() {
     _amountController.dispose();
     _remarksController.dispose();
-    _phoneController.dispose();
     _customerSearchController.dispose();
+    _phoneController.dispose();
     super.dispose();
   }
 
   Future<void> _handleSave() async {
-    final amountText = _amountController.text.trim();
-    if (amountText.isEmpty) {
-      _showSnackBar('Please enter an amount');
-      return;
-    }
-
-    final amount = double.tryParse(amountText);
+    var amount = double.tryParse(_amountController.text);
     if (amount == null || amount <= 0) {
       _showSnackBar('Please enter a valid amount');
       return;
     }
 
-    final provider = context.read<TransactionProvider>();
-    LocalCustomer? customerToLink = _selectedCustomer;
-
-    // Determine relation type for customer
-    String relationType = (_transactionType == 'OUTFLOW') ? 'CREDITOR' : 'DEBTOR';
-
-    if (_isCredit && _isNewCustomer && _customerSearchController.text.trim().isNotEmpty) {
-      customerToLink = await provider.addCustomer(
-        _customerSearchController.text.trim(),
-        phone: _phoneController.text.trim(),
-        relationType: relationType,
-      );
-    }
-
-    if (_isCredit && customerToLink == null) {
-      _showSnackBar('Please select or create a contact for this transaction');
+    if (_isCredit && _selectedCustomer == null && _customerSearchController.text.trim().isEmpty) {
+      _showSnackBar('Please select or enter a customer for credit transactions');
       return;
     }
 
+    final provider = context.read<TransactionProvider>();
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+
+    LocalCustomer? customerToLink = _selectedCustomer;
+    if (_isCredit && _selectedCustomer == null) {
+      customerToLink = LocalCustomer()
+        ..fullName = _customerSearchController.text.trim()
+        ..phoneNumber = _phoneController.text.trim()
+        ..relationType = _transactionType == 'INFLOW' ? 'DEBTOR' : 'CREDITOR';
+    }
+
+    // --- NEW LEDGER BUG INTERCEPTION FLOW ---
+    if (_isCredit && _selectedCustomer != null) {
+      bool hasOpposingDirection = false;
+
+      // Determine if the current transaction intent matches the opposing side
+      if (_selectedCustomer!.relationType == 'DEBTOR' && _transactionType == 'OUTFLOW') {
+        hasOpposingDirection = true; // They normally owe you, but you're logging an expense out to them
+      } else if (_selectedCustomer!.relationType == 'CREDITOR' && _transactionType == 'INFLOW') {
+        hasOpposingDirection = true; // You normally owe them, but you're logging income in from them
+      }
+
+      if (hasOpposingDirection) {
+        if (_selectedCustomer!.totalDebtAmount > 0) {
+          final String currentOpposingRole = _selectedCustomer!.relationType;
+
+        bool? isRepayment = await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (dialogCtx) => AlertDialog(
+            title: const Text('Match Balance?'),
+            content: Text(
+                '${_selectedCustomer!.fullName} currently has an active balance as a $currentOpposingRole.\n\nIs this entry a repayment/settlement for that existing balance, or a separate new ledger item?'
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogCtx, false), // Keep Separate
+                child: const Text('Separate Record'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  // Step 2: Boundary check for Repayment action
+                  if (amount! > _selectedCustomer!.totalDebtAmount) {
+                    final bool? confirmFull = await showDialog<bool>(
+                      context: context,
+                      builder: (alertCtx) => AlertDialog(
+                        content: Text(
+                            "The amount cannot be more than the balance to be paid (Outstanding: ₦${_selectedCustomer!.totalDebtAmount.toStringAsFixed(2)}). Is this amount intended as the full payment of this debt/credit?"),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(alertCtx, false),
+                            child: const Text("No"),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(alertCtx, true),
+                            child: const Text("Yes"),
+                          ),
+                        ],
+                      ),
+                    );
+
+                    if (confirmFull == true) {
+                      // Override amount to match balance
+                      _amountController.text = _selectedCustomer!.totalDebtAmount.toStringAsFixed(2);
+                      if (context.mounted) Navigator.pop(dialogCtx, true);
+                    } else {
+                      // Dismiss alert and return to entry sheet
+                      if (context.mounted) Navigator.pop(dialogCtx, null);
+                    }
+                  } else {
+                    Navigator.pop(dialogCtx, true);
+                  }
+                },
+                child: const Text('Repayment'),
+              ),
+            ],
+          ),
+        );
+
+        if (isRepayment == null) return; // User closed dialog or clicked No in boundary check
+
+        if (isRepayment) {
+          // Sync amount in case it was updated in the boundary confirmation dialog
+          amount = double.tryParse(_amountController.text) ?? amount;
+
+          // Process immediately as a repayment settlement
+          await provider.settleLedgerBalance(
+            customerId: _selectedCustomer!.id,
+            amountPaid: amount,
+            isCreditor: currentOpposingRole == 'CREDITOR',
+          );
+
+          if (!mounted) return;
+          navigator.pop();
+          return;
+          } else {
+             // --- AUTO-CREATE SEPARATE LEDGER PROFILE (ACTIVE BALANCE BYPASS) ---
+             // User explicitly chose 'Separate Record' in the modal despite an active opposing balance.
+             // We clone them cleanly to isolate the new debt track, stripping previous messy suffixes.
+             final String baseName = _selectedCustomer!.fullName.replaceAll(RegExp(r'\s*\((Debtor|Creditor)\)'), '');
+             final String suffix = _transactionType == 'INFLOW' ? '(Debtor)' : '(Creditor)';
+
+             customerToLink = LocalCustomer()
+               ..fullName = '$baseName $suffix'
+               ..phoneNumber = _selectedCustomer!.phoneNumber
+               ..relationType = _transactionType == 'INFLOW' ? 'DEBTOR' : 'CREDITOR';
+
+             _selectedCustomer = null;
+          }
+        }
+        // If totalDebtAmount == 0, we do NOTHING! 
+        // It seamlessly falls through and reuses the existing profile. 
+        // The database will now securely switch their relationType on the fly!
+      }
+    }
+    // --- END INTERCEPTION FLOW ---
+
+    // Save normally if it's a completely separate transaction or no conflict exists
     if (widget.transaction != null) {
       await provider.updateTransaction(
         id: widget.transaction!.id,
@@ -110,31 +199,38 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       );
     }
 
-    if (mounted) {
-      if (provider.errorMessage != null) {
-        _showSnackBar(provider.errorMessage!);
-      } else {
-        Navigator.pop(context);
-      }
+    if (!mounted) return;
+
+    if (provider.errorMessage != null) {
+      messenger.showSnackBar(SnackBar(content: Text(provider.errorMessage!)));
+    } else {
+      navigator.pop();
     }
   }
 
   void _showSnackBar(String message) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
   Widget build(BuildContext context) {
-    SizeConfig().init(context);
+    SizeConfig.init(context);
+    final theme = Theme.of(context);
+    final statusColors = theme.extension<StatusColors>()!;
+    final isDark = theme.brightness == Brightness.dark;
+    
     bool isExpense = _transactionType == 'OUTFLOW';
-    Color themeColor = isExpense ? Colors.red : Colors.green;
+    Color transactionColor = isExpense ? statusColors.outflow! : statusColors.inflow!;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: Text(widget.transaction != null ? 'Edit Transaction' : 'New Transaction', 
-                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: SizeConfig.setSp(20))),
-        backgroundColor: themeColor,
+        title: Text(
+          widget.transaction != null ? 'Edit Transaction' : 'New Transaction', 
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20.sp)
+        ),
+        backgroundColor: isDark ? theme.colorScheme.surface : transactionColor,
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
@@ -147,116 +243,127 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       ),
       body: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
-        padding: EdgeInsets.all(SizeConfig.blockWidth(6)),
+        padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 3.h),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Amount', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, fontSize: SizeConfig.setSp(14))),
+            // Amount Input
+            Text('Amount', style: theme.textTheme.labelSmall),
             TextField(
               controller: _amountController,
               autofocus: widget.transaction == null,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              style: TextStyle(fontSize: SizeConfig.setSp(48), fontWeight: FontWeight.bold, color: themeColor),
-              decoration: const InputDecoration(
+              style: TextStyle(fontSize: 42.sp, fontWeight: FontWeight.bold, color: transactionColor),
+              decoration: InputDecoration(
                 prefixText: '₦ ',
+                prefixStyle: TextStyle(fontSize: 32.sp, fontWeight: FontWeight.bold, color: transactionColor),
                 hintText: '0.00',
+                hintStyle: TextStyle(color: transactionColor.withValues(alpha: 0.3)),
                 border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
               ),
             ),
-            const Divider(thickness: 1.5),
-            SizedBox(height: SizeConfig.blockHeight(3)),
+            Divider(thickness: 1, color: theme.dividerTheme.color),
+            SizedBox(height: 3.h),
 
-            Text('Category', style: TextStyle(fontWeight: FontWeight.bold, fontSize: SizeConfig.setSp(16))),
-            SizedBox(height: SizeConfig.blockHeight(1.5)),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  _buildTypeButton('Sale / Income', 'INFLOW', Colors.green),
-                  SizedBox(width: SizeConfig.blockWidth(2)),
-                  _buildTypeButton('Expense', 'OUTFLOW', Colors.red),
-                ],
-              ),
+            // Category Selection
+            Text('Transaction Type', style: theme.textTheme.titleMedium),
+            SizedBox(height: 1.5.h),
+            Row(
+              children: [
+                _buildTypeButton('Sale / Income', 'INFLOW', statusColors.inflow!, theme),
+                SizedBox(width: 3.w),
+                _buildTypeButton('Expense', 'OUTFLOW', statusColors.outflow!, theme),
+              ],
             ),
-            SizedBox(height: SizeConfig.blockHeight(4)),
+            SizedBox(height: 4.h),
 
-            Text('Remarks', style: TextStyle(fontWeight: FontWeight.bold, fontSize: SizeConfig.setSp(16))),
-            SizedBox(height: SizeConfig.blockHeight(1)),
+            // Remarks Input
+            Text('Remarks', style: theme.textTheme.titleMedium),
+            SizedBox(height: 1.h),
             TextField(
               controller: _remarksController,
-              style: TextStyle(fontSize: SizeConfig.setSp(14)),
               decoration: InputDecoration(
                 hintText: 'What was this for?',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(SizeConfig.blockWidth(3))),
-                contentPadding: EdgeInsets.symmetric(horizontal: SizeConfig.blockWidth(4), vertical: SizeConfig.blockHeight(1.5)),
+                prefixIcon: const Icon(Icons.notes),
               ),
+              textCapitalization: TextCapitalization.sentences,
             ),
-            SizedBox(height: SizeConfig.blockHeight(4)),
+            SizedBox(height: 4.h),
 
-            Container(
-              margin: EdgeInsets.only(bottom: SizeConfig.blockHeight(4)),
-              padding: EdgeInsets.all(SizeConfig.blockWidth(4)),
-              decoration: BoxDecoration(
-                color: themeColor.withValues(alpha: 0.05),
-                borderRadius: BorderRadius.circular(SizeConfig.blockWidth(4)),
-                border: Border.all(color: themeColor.withValues(alpha: 0.1)),
+            // Credit Toggle Card
+            Card(
+              elevation: 0,
+              color: transactionColor.withValues(alpha: isDark ? 0.1 : 0.05),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: BorderSide(color: transactionColor.withValues(alpha: 0.2)),
               ),
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(isExpense ? 'Expense on Credit?' : 'Sale on Credit?', 
-                          style: TextStyle(fontWeight: FontWeight.bold, color: themeColor, fontSize: SizeConfig.setSp(14))),
-                      Switch(
-                        value: _isCredit,
-                        onChanged: (val) => setState(() => _isCredit = val),
-                        activeThumbColor: themeColor,
-                        activeTrackColor: themeColor.withValues(alpha: 0.5),
+              child: Padding(
+                padding: EdgeInsets.all(4.w),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.credit_card, color: transactionColor),
+                            SizedBox(width: 2.w),
+                            Text(
+                              isExpense ? 'Expense on Credit?' : 'Sale on Credit?', 
+                              style: TextStyle(fontWeight: FontWeight.bold, color: transactionColor, fontSize: 14.sp)
+                            ),
+                          ],
+                        ),
+                        Switch(
+                          value: _isCredit,
+                          onChanged: (val) => setState(() => _isCredit = val),
+                          activeThumbColor: transactionColor,
+                        ),
+                      ],
+                    ),
+                    if (_isCredit) ...[
+                      SizedBox(height: 2.h),
+                      _buildCustomerSelector(
+                        isExpense ? 'Select Creditor' : 'Select Debtor', 
+                        theme,
+                        transactionColor
                       ),
                     ],
-                  ),
-                  if (_isCredit) ...[
-                    SizedBox(height: SizeConfig.blockHeight(2)),
-                    _buildCustomerSelector(isExpense ? 'Creditor (Who you owe)' : 'Debtor (Who owes you)'),
                   ],
-                ],
+                ),
               ),
             ),
 
             if (_isNewCustomer && _isCredit) ...[
-              Text('New Contact Details', style: TextStyle(fontWeight: FontWeight.bold, fontSize: SizeConfig.setSp(16))),
-              SizedBox(height: SizeConfig.blockHeight(1.5)),
+              SizedBox(height: 3.h),
+              Text('New Contact Details', style: theme.textTheme.titleMedium),
+              SizedBox(height: 1.5.h),
               TextField(
                 controller: _phoneController,
                 keyboardType: TextInputType.phone,
-                style: TextStyle(fontSize: SizeConfig.setSp(14)),
-                decoration: InputDecoration(
+                decoration: const InputDecoration(
                   labelText: 'Phone Number (Optional)',
-                  prefixIcon: const Icon(Icons.phone),
-                  filled: true,
-                  fillColor: Colors.white,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(SizeConfig.blockWidth(3))),
+                  prefixIcon: Icon(Icons.phone),
                 ),
               ),
-              SizedBox(height: SizeConfig.blockHeight(4)),
             ],
 
-            SizedBox(
-              width: double.infinity,
-              height: SizeConfig.blockHeight(7),
-              child: ElevatedButton(
-                onPressed: _handleSave,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: themeColor,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SizeConfig.blockWidth(4))),
-                  elevation: 2,
-                ),
-                child: Text(widget.transaction != null ? 'Update Transaction' : 'Save Transaction', 
-                           style: TextStyle(fontSize: SizeConfig.setSp(18), fontWeight: FontWeight.bold)),
+            SizedBox(height: 6.h),
+            
+            ElevatedButton(
+              onPressed: _handleSave,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: transactionColor,
+                foregroundColor: Colors.white,
+              ),
+              child: Text(
+                widget.transaction != null ? 'Update Transaction' : 'Save Transaction',
               ),
             ),
+            SizedBox(height: 2.h),
           ],
         ),
       ),
@@ -268,33 +375,33 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Transaction?'),
-        content: const Text('This action cannot be undone.'),
+        content: const Text('This action cannot be undone and will update your balances.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
           TextButton(
             onPressed: () async {
               final provider = context.read<TransactionProvider>();
+              final navigator = Navigator.of(context);
               await provider.deleteTransaction(widget.transaction!.id);
               if (mounted) {
-                Navigator.pop(context); 
-                Navigator.pop(context); 
+                navigator.pop(); // Close dialog
+                navigator.pop(); // Go back to home
               }
             },
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+            child: const Text('Delete', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildCustomerSelector(String hint) {
+  Widget _buildCustomerSelector(String hint, ThemeData theme, Color accentColor) {
     return Consumer<TransactionProvider>(
       builder: (context, provider, child) {
         return Autocomplete<LocalCustomer>(
           displayStringForOption: (option) => option.fullName,
           initialValue: TextEditingValue(text: _customerSearchController.text),
           optionsBuilder: (TextEditingValue textEditingValue) {
-            // provider.customers is already sorted by lastUsed desc from the DatabaseService
             if (textEditingValue.text.isEmpty) {
               return provider.customers;
             }
@@ -312,19 +419,25 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
             return Align(
               alignment: Alignment.topLeft,
               child: Material(
-                elevation: 4.0,
-                borderRadius: BorderRadius.circular(SizeConfig.blockWidth(3)),
+                elevation: 8.0,
+                color: theme.cardTheme.color,
+                borderRadius: BorderRadius.circular(12),
                 child: Container(
-                  width: SizeConfig.screenWidth - SizeConfig.blockWidth(20), // Constrain width
-                  constraints: BoxConstraints(maxHeight: SizeConfig.blockHeight(30)), // Constrain height
-                  child: ListView.builder(
+                  width: 80.w,
+                  constraints: BoxConstraints(maxHeight: 30.h),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: theme.dividerTheme.color!),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: ListView.separated(
                     padding: EdgeInsets.zero,
                     shrinkWrap: true,
                     itemCount: options.length,
+                    separatorBuilder: (ctx, idx) => Divider(height: 1, color: theme.dividerTheme.color),
                     itemBuilder: (BuildContext context, int index) {
                       final LocalCustomer option = options.elementAt(index);
                       return ListTile(
-                        title: Text(option.fullName, style: TextStyle(fontSize: SizeConfig.setSp(14))),
+                        title: Text(option.fullName, style: theme.textTheme.bodyLarge),
                         onTap: () => onSelected(option),
                       );
                     },
@@ -337,7 +450,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
             return TextField(
               controller: controller,
               focusNode: focusNode,
-              style: TextStyle(fontSize: SizeConfig.setSp(14)),
               onChanged: (val) {
                 setState(() {
                   _isNewCustomer = false;
@@ -347,14 +459,12 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
               },
               decoration: InputDecoration(
                 hintText: hint,
-                prefixIcon: const Icon(Icons.person_search),
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(SizeConfig.blockWidth(3))),
+                prefixIcon: const Icon(Icons.person_outline),
                 suffixIcon: (controller.text.isNotEmpty && 
                             !provider.customers.any((c) => c.fullName.toLowerCase() == controller.text.toLowerCase()))
                     ? IconButton(
-                        icon: const Icon(Icons.person_add, color: Colors.indigo),
+                        icon: const Icon(Icons.person_add_alt_1),
+                        tooltip: 'Add as new contact',
                         onPressed: () {
                           setState(() {
                             _isNewCustomer = true;
@@ -372,25 +482,33 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     );
   }
 
-  Widget _buildTypeButton(String label, String type, Color color) {
+  Widget _buildTypeButton(String label, String type, Color color, ThemeData theme) {
     bool isSelected = _transactionType == type;
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _transactionType = type;
-        });
-      },
-      child: Container(
-        padding: EdgeInsets.symmetric(vertical: SizeConfig.blockHeight(1.5), horizontal: SizeConfig.blockWidth(4)),
-        decoration: BoxDecoration(
-          color: isSelected ? color : Colors.white,
-          borderRadius: BorderRadius.circular(SizeConfig.blockWidth(3)),
-          border: Border.all(color: color, width: 2),
-        ),
-        child: Center(
-          child: Text(
-            label,
-            style: TextStyle(color: isSelected ? Colors.white : color, fontWeight: FontWeight.bold, fontSize: SizeConfig.setSp(14)),
+    final isDark = theme.brightness == Brightness.dark;
+    
+    return Expanded(
+      child: InkWell(
+        onTap: () => setState(() => _transactionType = type),
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: EdgeInsets.symmetric(vertical: 1.5.h),
+          decoration: BoxDecoration(
+            color: isSelected ? color : (isDark ? theme.colorScheme.surface : Colors.transparent),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSelected ? color : theme.dividerTheme.color!,
+              width: 1.5,
+            ),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? Colors.white : theme.textTheme.bodyLarge?.color, 
+                fontWeight: FontWeight.bold, 
+                fontSize: 14.sp
+              ),
+            ),
           ),
         ),
       ),
