@@ -17,7 +17,7 @@ class AdaptiveBrandLogo extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Image.asset(
-      isDark ? 'assets/logo/app_icon_dark.png' : 'assets/logo/app_icon_light.png',
+      isDark ? 'assets/logo/app_splashscreen_dark.png' : 'assets/logo/app_splashscreen_light.png',
       width: width ?? 40.w, // Scales via your responsive configuration size bounds
       height: height ?? 40.w,
       fit: BoxFit.contain,

@@ -5,7 +5,6 @@ import 'package:path_provider/path_provider.dart';
 import 'package:intl/intl.dart';
 import '../models/local_customer.dart';
 import '../models/local_transaction.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 class DatabaseService {
   static late Isar isar;
