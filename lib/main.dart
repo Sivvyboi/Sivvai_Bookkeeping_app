@@ -1,23 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:provider/provider.dart';
 import 'services/database_service.dart';
 import 'providers/transaction_provider.dart';
 import 'providers/theme_provider.dart';
 import 'providers/security_provider.dart';
 import 'screens/splash_screen.dart';
-import 'utils/size_config.dart'; // Make sure this path matches your file structure
-void main() async {
-  // 1. Ensure Flutter bindings are initialized before calling native code
-  WidgetsFlutterBinding.ensureInitialized();
+import 'utils/size_config.dart';
 
-  // 2. Lock orientation to portrait only (Secondary programmatic safety net)
+void main() async {
+  // 1. Store bindings instance to preserve native splash screen
+  WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
+  FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
+
+  // 2. Lock orientation to portrait only
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
 
-  // 3. Initialize the Isar database singleton
+  // 3. Initialize the database singleton
   await DatabaseService.init();
 
   runApp(
@@ -52,7 +55,7 @@ class MyApp extends StatelessWidget {
             // Set System UI Overlay Style based on the current theme dynamically
             SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
               statusBarColor: Colors.transparent,
-              statusBarIconBrightness: Brightness.light, // Kept light as per your design
+              statusBarIconBrightness: Brightness.light,
               systemNavigationBarColor: isDark ? const Color(0xFF0F172A) : Colors.white,
               systemNavigationBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
             ));

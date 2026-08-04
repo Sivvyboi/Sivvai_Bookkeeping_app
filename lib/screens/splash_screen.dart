@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:provider/provider.dart';
 import '../providers/transaction_provider.dart';
 import '../providers/security_provider.dart';
@@ -19,28 +20,30 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _initializeApp() async {
-    // 1. Kick off any data refreshing while the logo is visible
+    // 1. Fetch background data
     final provider = Provider.of<TransactionProvider>(context, listen: false);
     await provider.refreshData();
 
-    // 2. SET DURATION HERE: Forces the screen to display for at least 1.5 seconds
+    // 2. Optional: Add a brief minimum display duration so the screen isn't a flash
     await Future.delayed(const Duration(milliseconds: 1500));
 
-    // 3. TARGET SCREEN HERE: Send them to HomeScreen and remove Splash from the stack
-    if (mounted) {
-      final security = Provider.of<SecurityProvider>(context, listen: false);
-      final authenticated = await security.authenticate();
-      
-      if (authenticated && mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const MainNavigationWrapper()),
-        );
-      } else {
-        // If authentication failed or cancelled, we stay on splash or show an error
-        // For simplicity, we just try again if they tap or similar, 
-        // but usually, we'd have a "Retry" button.
-      }
+    if (!mounted) return;
+
+    // 3. Prompt for authentication while still on the splash screen
+    final security = Provider.of<SecurityProvider>(context, listen: false);
+    final authenticated = await security.authenticate();
+
+    if (authenticated && mounted) {
+      // 4. Remove native splash overlay right before transitioning away
+      FlutterNativeSplash.remove();
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const MainNavigationWrapper()),
+      );
+    } else {
+      // If auth fails/cancels, remove the native splash so the user can see your fallback UI
+      FlutterNativeSplash.remove();
     }
   }
 
@@ -49,12 +52,10 @@ class _SplashScreenState extends State<SplashScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF01040B) : Colors.white,
-      body: Center(
+      body: SizedBox.expand(
         child: Image.asset(
-          isDark ? 'assets/logo/app_icon_dark.png' : 'assets/logo/app_icon_light.png',
-          width: MediaQuery.of(context).size.width * 0.6,
-          fit: BoxFit.contain,
+          isDark ? 'assets/app_splashscreen_dark.png' : 'assets/app_splashscreen_light.png',
+          fit: BoxFit.cover,
         ),
       ),
     );

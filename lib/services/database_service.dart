@@ -6,7 +6,6 @@ import 'package:intl/intl.dart';
 import '../models/local_customer.dart';
 import '../models/local_transaction.dart';
 
-
 class DatabaseService {
   static late Isar isar;
 
