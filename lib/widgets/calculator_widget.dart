@@ -109,6 +109,14 @@ class _CalculatorModalSheetState extends State<CalculatorModalSheet> {
     });
   }
 
+  void _onEqualsPressed() {
+    setState(() {
+      double total = _liveTotal;
+      _tokens.clear();
+      _currentInput = _formatNumber(total);
+    });
+  }
+
   void _onClearPressed() {
     setState(() {
       _tokens.clear();
@@ -169,8 +177,8 @@ class _CalculatorModalSheetState extends State<CalculatorModalSheet> {
         ],
       ),
       padding: EdgeInsets.only(
-        left: 6.w,
-        right: 6.w,
+        left: 5.w,
+        right: 5.w,
         top: 2.h,
         bottom: MediaQuery.of(context).padding.bottom + 2.h,
       ),
@@ -180,7 +188,7 @@ class _CalculatorModalSheetState extends State<CalculatorModalSheet> {
           // Drag Handle
           Container(
             width: 12.w,
-            height: 4,
+            height: 5,
             decoration: BoxDecoration(
               color: isDark ? Colors.white24 : Colors.grey.shade300,
               borderRadius: BorderRadius.circular(10),
@@ -199,30 +207,32 @@ class _CalculatorModalSheetState extends State<CalculatorModalSheet> {
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
                 color: widget.accentColor.withValues(alpha: 0.2),
+                width: 1.5,
               ),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                // Expression string
+                // Expression string with enlarged text
                 Text(
                   _expressionString.isEmpty ? '0' : _expressionString,
                   style: TextStyle(
-                    fontSize: 13.sp,
+                    fontSize: 16.sp,
+                    fontWeight: FontWeight.w500,
                     color: isDark ? Colors.white60 : Colors.black54,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
                 SizedBox(height: 0.8.h),
-                // Prominent Live Evaluated Total
+                // Prominent Live Evaluated Total with enlarged text
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   reverse: true,
                   child: Text(
                     '₦ ${_formatNumber(total)}',
                     style: TextStyle(
-                      fontSize: 32.sp,
+                      fontSize: 42.sp,
                       fontWeight: FontWeight.bold,
                       color: widget.accentColor,
                     ),
@@ -233,46 +243,60 @@ class _CalculatorModalSheetState extends State<CalculatorModalSheet> {
           ),
           SizedBox(height: 2.5.h),
 
-          // Keypad Rows with Circular Buttons
+          // Keypad Rows with Standard handheld layout (including =)
           Column(
             children: [
+              // Row 1: AC, ⌫, space, ÷
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   _buildCircleButton('AC', color: Colors.redAccent, onPressed: _onClearPressed),
                   _buildCircleButton('⌫', color: Colors.orangeAccent, onPressed: _onBackspacePressed),
+                  SizedBox(width: 16.5.w), // Empty slot spacer
                   _buildCircleButton('÷', isOperator: true, onPressed: () => _onOperatorPressed('÷')),
-                  _buildCircleButton('×', isOperator: true, onPressed: () => _onOperatorPressed('×')),
                 ],
               ),
-              SizedBox(height: 1.5.h),
+              SizedBox(height: 1.2.h),
+              // Row 2: 7, 8, 9, ×
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   _buildCircleButton('7', onPressed: () => _onDigitPressed('7')),
                   _buildCircleButton('8', onPressed: () => _onDigitPressed('8')),
                   _buildCircleButton('9', onPressed: () => _onDigitPressed('9')),
-                  _buildCircleButton('-', isOperator: true, onPressed: () => _onOperatorPressed('-')),
+                  _buildCircleButton('×', isOperator: true, onPressed: () => _onOperatorPressed('×')),
                 ],
               ),
-              SizedBox(height: 1.5.h),
+              SizedBox(height: 1.2.h),
+              // Row 3: 4, 5, 6, -
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   _buildCircleButton('4', onPressed: () => _onDigitPressed('4')),
                   _buildCircleButton('5', onPressed: () => _onDigitPressed('5')),
                   _buildCircleButton('6', onPressed: () => _onDigitPressed('6')),
-                  _buildCircleButton('+', isOperator: true, onPressed: () => _onOperatorPressed('+')),
+                  _buildCircleButton('-', isOperator: true, onPressed: () => _onOperatorPressed('-')),
                 ],
               ),
-              SizedBox(height: 1.5.h),
+              SizedBox(height: 1.2.h),
+              // Row 4: 1, 2, 3, +
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   _buildCircleButton('1', onPressed: () => _onDigitPressed('1')),
                   _buildCircleButton('2', onPressed: () => _onDigitPressed('2')),
                   _buildCircleButton('3', onPressed: () => _onDigitPressed('3')),
+                  _buildCircleButton('+', isOperator: true, onPressed: () => _onOperatorPressed('+')),
+                ],
+              ),
+              SizedBox(height: 1.2.h),
+              // Row 5: 0 (pill), ., =
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _buildPillButton('0', onPressed: () => _onDigitPressed('0')),
                   _buildCircleButton('.', onPressed: () => _onDigitPressed('.')),
+                  _buildCircleButton('=', isEquals: true, onPressed: _onEqualsPressed),
                 ],
               ),
               SizedBox(height: 2.5.h),
@@ -282,11 +306,11 @@ class _CalculatorModalSheetState extends State<CalculatorModalSheet> {
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   onPressed: total > 0 ? _confirmAmount : null,
-                  icon: const Icon(Icons.check_circle_outline, size: 22),
+                  icon: const Icon(Icons.check_circle_outline, size: 24),
                   label: Text(
                     'Use Amount (₦ ${_formatNumber(total)})',
                     style: TextStyle(
-                      fontSize: 16.sp,
+                      fontSize: 18.sp,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -314,11 +338,12 @@ class _CalculatorModalSheetState extends State<CalculatorModalSheet> {
     String label, {
     Color? color,
     bool isOperator = false,
+    bool isEquals = false,
     required VoidCallback onPressed,
   }) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final double buttonSize = 16.w;
+    final double buttonSize = 16.5.w;
 
     Color btnBg = isDark ? Colors.white.withValues(alpha: 0.08) : Colors.grey.shade100;
     Color txtColor = theme.textTheme.bodyLarge?.color ?? Colors.black;
@@ -326,6 +351,10 @@ class _CalculatorModalSheetState extends State<CalculatorModalSheet> {
     if (isOperator) {
       btnBg = widget.accentColor.withValues(alpha: isDark ? 0.25 : 0.12);
       txtColor = widget.accentColor;
+    }
+    if (isEquals) {
+      btnBg = widget.accentColor;
+      txtColor = Colors.white;
     }
     if (color != null) {
       txtColor = color;
@@ -354,9 +383,53 @@ class _CalculatorModalSheetState extends State<CalculatorModalSheet> {
             child: Text(
               label,
               style: TextStyle(
-                fontSize: 18.sp,
+                fontSize: 22.sp,
                 fontWeight: FontWeight.bold,
                 color: txtColor,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPillButton(
+    String label, {
+    required VoidCallback onPressed,
+  }) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final double buttonWidth = 35.w;
+    final double buttonHeight = 16.5.w;
+
+    Color btnBg = isDark ? Colors.white.withValues(alpha: 0.08) : Colors.grey.shade100;
+    Color txtColor = theme.textTheme.bodyLarge?.color ?? Colors.black;
+
+    return Container(
+      width: buttonWidth,
+      height: buttonHeight,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(100),
+        color: btnBg,
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(100),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onPressed,
+          child: Padding(
+            padding: EdgeInsets.only(left: 6.w),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 22.sp,
+                  fontWeight: FontWeight.bold,
+                  color: txtColor,
+                ),
               ),
             ),
           ),
