@@ -35,8 +35,53 @@ void main() async {
   );
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
+  DateTime? _pausedTime;
+  bool _isAuthenticating = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) async {
+    if (state == AppLifecycleState.paused) {
+      // Record the exact time the app went to the background
+      _pausedTime = DateTime.now();
+    } else if (state == AppLifecycleState.resumed) {
+      if (_pausedTime != null) {
+        final timeDifference = DateTime.now().difference(_pausedTime!);
+
+        // If 5 minutes (or more) passed, require biometrics
+        if (timeDifference.inMinutes >= 5 && !_isAuthenticating) {
+          _isAuthenticating = true;
+          final securityProvider = context.read<SecurityProvider>();
+
+          if (securityProvider.isLockEnabled) {
+            await securityProvider.authenticate();
+          }
+
+          _isAuthenticating = false;
+        }
+      }
+      _pausedTime = null; // Reset paused time after evaluation
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

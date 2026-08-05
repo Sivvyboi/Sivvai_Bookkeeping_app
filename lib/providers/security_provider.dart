@@ -6,6 +6,7 @@ class SecurityProvider with ChangeNotifier {
 
   bool _isLockEnabled = false;
   bool _isBiometricsAvailable = false;
+  bool _isInitialized = false; // Track initialization state
 
   bool get isLockEnabled => _isLockEnabled;
   bool get isBiometricsAvailable => _isBiometricsAvailable;
@@ -17,12 +18,20 @@ class SecurityProvider with ChangeNotifier {
   Future<void> _init() async {
     _isBiometricsAvailable = await _securityService.isBiometricsAvailable();
     _isLockEnabled = await _securityService.isLockEnabled();
+    _isInitialized = true;
     notifyListeners();
   }
 
+  // Ensures preferences are loaded before checking lock status
+  Future<void> ensureInitialized() async {
+    if (!_isInitialized) {
+      await _init();
+    }
+  }
+
   Future<bool> toggleLock(bool enable) async {
+    await ensureInitialized();
     if (enable) {
-      // Prompt user to verify fingerprint/face BEFORE enabling the toggle
       final authenticated = await _securityService.authenticate();
       if (authenticated) {
         _isLockEnabled = true;
@@ -30,7 +39,7 @@ class SecurityProvider with ChangeNotifier {
         notifyListeners();
         return true;
       } else {
-        return false; // Auth failed or canceled
+        return false;
       }
     } else {
       _isLockEnabled = false;
@@ -41,7 +50,8 @@ class SecurityProvider with ChangeNotifier {
   }
 
   Future<bool> authenticate() async {
-    if (!_isLockEnabled) return true; // Skip if lock isn't active
+    await ensureInitialized(); // MUST wait for SharedPreferences to complete
+    if (!_isLockEnabled) return true;
     return await _securityService.authenticate();
   }
 }

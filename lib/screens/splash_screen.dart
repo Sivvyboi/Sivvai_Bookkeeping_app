@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:provider/provider.dart';
 import '../providers/transaction_provider.dart';
@@ -13,37 +14,55 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
+  bool _authFailed = false;
+
   @override
   void initState() {
     super.initState();
+    _configureEdgeToEdge();
     _initializeApp();
   }
 
+  void _configureEdgeToEdge() {
+    // Enable edge-to-edge drawing under status and navigation bars
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+        statusBarBrightness: Brightness.dark, // Ensures iOS clock/icons remain visible
+        systemNavigationBarColor: Colors.transparent,
+        systemNavigationBarDividerColor: Colors.transparent,
+      ),
+    );
+  }
+
   Future<void> _initializeApp() async {
-    // 1. Fetch background data
+    setState(() => _authFailed = false);
+
+    // 1. Fetch data
     final provider = Provider.of<TransactionProvider>(context, listen: false);
     await provider.refreshData();
 
-    // 2. Optional: Add a brief minimum display duration so the screen isn't a flash
-    await Future.delayed(const Duration(milliseconds: 1500));
+    // 2. Small delay for smooth transition
+    await Future.delayed(const Duration(milliseconds: 500));
 
     if (!mounted) return;
 
-    // 3. Prompt for authentication while still on the splash screen
+    // 3. Remove native splash so Flutter renders this splash screen image
+    FlutterNativeSplash.remove();
+
+    // 4. Prompt for Biometrics directly on the splash screen
     final security = Provider.of<SecurityProvider>(context, listen: false);
     final authenticated = await security.authenticate();
 
     if (authenticated && mounted) {
-      // 4. Remove native splash overlay right before transitioning away
-      FlutterNativeSplash.remove();
-
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => const MainNavigationWrapper()),
       );
-    } else {
-      // If auth fails/cancels, remove the native splash so the user can see your fallback UI
-      FlutterNativeSplash.remove();
+    } else if (mounted) {
+      setState(() => _authFailed = true);
     }
   }
 
@@ -52,11 +71,36 @@ class _SplashScreenState extends State<SplashScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      body: SizedBox.expand(
-        child: Image.asset(
-          isDark ? 'assets/app_splashscreen_dark.png' : 'assets/app_splashscreen_light.png',
-          fit: BoxFit.cover,
-        ),
+      extendBodyBehindAppBar: true, // Draws image behind status bar
+      body: Stack(
+        children: [
+          SizedBox.expand(
+            child: Image.asset(
+              isDark ? 'assets/app_splashscreen_dark.png' : 'assets/app_splashscreen_light.png',
+              fit: BoxFit.cover,
+            ),
+          ),
+          if (_authFailed)
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 60.0),
+                child: ElevatedButton.icon(
+                  onPressed: _initializeApp,
+                  icon: const Icon(Icons.fingerprint),
+                  label: const Text('Unlock Sivvai'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0F172A),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(30),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
