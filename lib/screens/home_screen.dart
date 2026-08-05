@@ -4,12 +4,14 @@ import 'package:intl/intl.dart';
 import '../adaptive_brand_logo.dart';
 import '../providers/transaction_provider.dart';
 import '../providers/theme_provider.dart';
+import '../providers/profile_provider.dart';
 import '../utils/size_config.dart';
 import '../widgets/responsive_value_text.dart';
 import 'add_transaction_screen.dart';
 import 'debt_ledger_screen.dart';
 import 'settings_screen.dart';
 import 'global_history_screen.dart';
+import 'profile_screen.dart';
 
 
 class HomeScreen extends StatelessWidget {
@@ -25,9 +27,34 @@ class HomeScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: Text(
-          'Bookkeeper Dashboard',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20.sp),
+        // Profile name as tappable title — opens ProfileScreen.
+        title: Consumer<ProfileProvider>(
+          builder: (context, profileProvider, _) {
+            final profileName =
+                profileProvider.activeProfile?.name ?? 'Bookkeeper';
+            return GestureDetector(
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (context) => const ProfileScreen()),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: Text(
+                      profileName,
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 20.sp),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  const Icon(Icons.expand_more, size: 20, color: Colors.white70),
+                ],
+              ),
+            );
+          },
         ),
         actions: [
           IconButton(

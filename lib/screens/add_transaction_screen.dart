@@ -5,6 +5,7 @@ import '../providers/theme_provider.dart';
 import '../models/local_customer.dart';
 import '../models/local_transaction.dart';
 import '../utils/size_config.dart';
+import '../widgets/calculator_widget.dart';
 
 class AddTransactionScreen extends StatefulWidget {
   final LocalTransaction? transaction;
@@ -247,8 +248,36 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Amount Input
-            Text('Amount', style: theme.textTheme.labelSmall),
+            // Amount Input Header
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('Amount', style: theme.textTheme.labelSmall),
+                IconButton(
+                  icon: Icon(
+                    Icons.calculate_outlined,
+                    color: transactionColor,
+                    size: 22.sp,
+                  ),
+                  tooltip: 'Calculator',
+                  onPressed: () {
+                    FocusScope.of(context).unfocus();
+                    CalculatorModalSheet.show(
+                      context: context,
+                      accentColor: transactionColor,
+                      onResultConfirmed: (val) {
+                        setState(() {
+                          String formatted = val == val.toInt().toDouble()
+                              ? val.toInt().toString()
+                              : val.toStringAsFixed(2);
+                          _amountController.text = formatted;
+                        });
+                      },
+                    );
+                  },
+                ),
+              ],
+            ),
             TextField(
               controller: _amountController,
               autofocus: widget.transaction == null,

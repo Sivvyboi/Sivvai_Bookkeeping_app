@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:provider/provider.dart';
-import 'services/database_service.dart';
 import 'providers/transaction_provider.dart';
 import 'providers/theme_provider.dart';
 import 'providers/security_provider.dart';
+import 'providers/profile_provider.dart';
 import 'screens/splash_screen.dart';
 import 'utils/size_config.dart';
 
@@ -20,8 +20,9 @@ void main() async {
     DeviceOrientation.portraitDown,
   ]);
 
-  // 3. Initialize the database singleton
-  await DatabaseService.init();
+  // 3. ProfileService.init() + DatabaseService.switchToProfile() are called
+  //    lazily inside SplashScreen so the native splash stays visible while
+  //    the databases open.
 
   runApp(
     MultiProvider(
@@ -29,6 +30,7 @@ void main() async {
         ChangeNotifierProvider(create: (_) => TransactionProvider()),
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider(create: (_) => SecurityProvider()),
+        ChangeNotifierProvider(create: (_) => ProfileProvider()),
       ],
       child: const MyApp(),
     ),

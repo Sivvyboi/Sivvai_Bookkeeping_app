@@ -107,6 +107,22 @@ class TransactionProvider with ChangeNotifier {
     _updateTransactionStream();
   }
 
+  /// Called after a profile switch to re-bind all Isar stream subscriptions
+  /// to the newly-opened database instance. Existing subscription state is
+  /// cleanly cancelled before re-subscribing.
+  Future<void> reinitialize() async {
+    await _transactionSubscription?.cancel();
+    await _customerSubscription?.cancel();
+    _transactionSubscription = null;
+    _customerSubscription = null;
+    _allTransactions = [];
+    _customers = [];
+    _totalLiquidCash = 0.0;
+    _totalSales = 0.0;
+    _totalExpenses = 0.0;
+    _initListeners();
+  }
+
   // --- Initialization & Stream Management ---
 
   void _initListeners() {

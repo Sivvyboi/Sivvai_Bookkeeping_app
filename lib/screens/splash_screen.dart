@@ -4,6 +4,9 @@ import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:provider/provider.dart';
 import '../providers/transaction_provider.dart';
 import '../providers/security_provider.dart';
+import '../providers/profile_provider.dart';
+import '../services/profile_service.dart';
+import '../services/database_service.dart';
 import 'main_navigation_wrapper.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -40,19 +43,33 @@ class _SplashScreenState extends State<SplashScreen> {
   Future<void> _initializeApp() async {
     setState(() => _authFailed = false);
 
-    // 1. Fetch data
-    final provider = Provider.of<TransactionProvider>(context, listen: false);
-    await provider.refreshData();
+    // 1. Initialise the profile meta-database and get the default profile.
+    final defaultProfile = await ProfileService.init();
 
-    // 2. Small delay for smooth transition
+    // 2. Open the data Isar instance for that profile.
+    await DatabaseService.switchToProfile(defaultProfile);
+
+    // 3. Inform ProfileProvider of the active profile (it was created before
+    //    ProfileService was ready, so we sync it now).
+    if (mounted) {
+      context.read<ProfileProvider>().setActiveProfileAfterInit(defaultProfile);
+    }
+
+    // 4. Pre-fetch transaction data.
+    if (mounted) {
+      final provider = Provider.of<TransactionProvider>(context, listen: false);
+      await provider.refreshData();
+    }
+
+    // 5. Small delay for smooth transition.
     await Future.delayed(const Duration(milliseconds: 500));
 
     if (!mounted) return;
 
-    // 3. Remove native splash so Flutter renders this splash screen image
+    // 6. Remove native splash so Flutter renders this splash screen image.
     FlutterNativeSplash.remove();
 
-    // 4. Prompt for Biometrics directly on the splash screen
+    // 7. Prompt for Biometrics — applies globally across all profiles.
     final security = Provider.of<SecurityProvider>(context, listen: false);
     final authenticated = await security.authenticate();
 
