@@ -114,14 +114,14 @@ class ThemeProvider with ChangeNotifier {
   ThemeMode get currentThemeMode => _themeMode;
 
   /// Professional Light Theme
-  /// Green and Blue color scheme with crisp white surfaces.
+  /// Crisp pure white canvas with brand green/cyan/blue accents.
   ThemeData get lightTheme {
     final colorScheme = ColorScheme.fromSeed(
-      seedColor: const Color(0xFF1A237E), // Professional Indigo
-      primary: const Color(0xFF1A237E),
-      secondary: const Color(0xFF2E7D32), // Professional Green
+      seedColor: const Color(0xFF10B981),
+      primary: const Color(0xFF10B981),
+      secondary: const Color(0xFF06B6D4),
       surface: Colors.white,
-      background: const Color(0xFFF8FAFC),
+      background: const Color(0xFFFFFFFF),
       error: const Color(0xFFD32F2F),
       onPrimary: Colors.white,
       onSecondary: Colors.white,
@@ -134,7 +134,7 @@ class ThemeProvider with ChangeNotifier {
           inflow: const Color(0xFF2E7D32),
           inflowContainer: const Color(0xFFE8F5E9),
           onInflowContainer: const Color(0xFF1B5E20),
-          onDashboardInflow: const Color(0xFFC8E6C9),
+          onDashboardInflow: Colors.white,
           inflowGradient: LinearGradient(
             colors: [const Color(0xFF2E7D32), Colors.green.shade400],
             begin: Alignment.topLeft,
@@ -143,7 +143,7 @@ class ThemeProvider with ChangeNotifier {
           outflow: const Color(0xFFD32F2F),
           outflowContainer: const Color(0xFFFFEBEE),
           onOutflowContainer: const Color(0xFFB71C1C),
-          onDashboardOutflow: const Color(0xFFFFCDD2),
+          onDashboardOutflow: Colors.white,
           outflowGradient: LinearGradient(
             colors: [const Color(0xFFD32F2F), Colors.red.shade400],
             begin: Alignment.topLeft,
@@ -152,11 +152,15 @@ class ThemeProvider with ChangeNotifier {
           debt: const Color(0xFFF57C00),
           debtContainer: const Color(0xFFFFF3E0),
           onDebtContainer: const Color(0xFFE65100),
-          onDashboardDebt: const Color(0xFFFFE0B2),
+          onDashboardDebt: Colors.white,
           dashboardGradient: const LinearGradient(
-            colors: [Color(0xFF1A237E), Color(0xFF3949AB)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFF10B981), // Emerald green
+              Color(0xFF06B6D4), // Bright cyan
+              Color(0xFF1D4ED8), // Deep blue
+            ],
+            begin: Alignment.topRight,
+            end: Alignment.bottomLeft,
           ),
         ),
       ],
@@ -164,15 +168,15 @@ class ThemeProvider with ChangeNotifier {
   }
 
   /// Midnight Dark Theme
-  /// Deep midnight blue/grey surfaces with bright green accents.
+  /// Deep midnight blue/grey (#0F172A) background with vibrant accents.
   ThemeData get darkTheme {
     final colorScheme = ColorScheme.fromSeed(
-      seedColor: const Color(0xFF818CF8),
+      seedColor: const Color(0xFF06B6D4),
       brightness: Brightness.dark,
-      primary: const Color(0xFF818CF8),
-      secondary: const Color(0xFF4ADE80), // Bright contrasting green accent
+      primary: const Color(0xFF06B6D4),
+      secondary: const Color(0xFF10B981),
       surface: const Color(0xFF1E293B), // Midnight Blue/Grey Surface
-      background: const Color(0xFF0F172A), // Deep Midnight Background
+      background: const Color(0xFF0F172A), // Deep Midnight Background #0F172A
       error: const Color(0xFFF87171),
       onPrimary: const Color(0xFF0F172A),
       onSecondary: const Color(0xFF0F172A),
@@ -185,7 +189,7 @@ class ThemeProvider with ChangeNotifier {
           inflow: const Color(0xFF4ADE80),
           inflowContainer: const Color(0xFF4ADE80).withValues(alpha: .15),
           onInflowContainer: const Color(0xFF4ADE80),
-          onDashboardInflow: const Color(0xFFBBF7D0),
+          onDashboardInflow: Colors.white,
           inflowGradient: LinearGradient(
             colors: [const Color(0xFF4ADE80), Colors.green.shade700],
             begin: Alignment.topLeft,
@@ -194,7 +198,7 @@ class ThemeProvider with ChangeNotifier {
           outflow: const Color(0xFFFB7185),
           outflowContainer: const Color(0xFFFB7185).withValues(alpha: .15),
           onOutflowContainer: const Color(0xFFFB7185),
-          onDashboardOutflow: const Color(0xFFFECDD3),
+          onDashboardOutflow: Colors.white,
           outflowGradient: const LinearGradient(
             colors: [Color(0xFFFB7185), Color(0xFFF43F5E)],
             begin: Alignment.topLeft,
@@ -203,11 +207,15 @@ class ThemeProvider with ChangeNotifier {
           debt: const Color(0xFFFB923C),
           debtContainer: const Color(0xFFFB923C).withValues(alpha: .15),
           onDebtContainer: const Color(0xFFFB923C),
-          onDashboardDebt: const Color(0xFFFFEDD5),
+          onDashboardDebt: Colors.white,
           dashboardGradient: const LinearGradient(
-            colors: [Color(0xFF1E293B), Color(0xFF0F172A)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFF10B981), // Emerald green
+              Color(0xFF06B6D4), // Bright cyan
+              Color(0xFF1D4ED8), // Deep blue
+            ],
+            begin: Alignment.topRight,
+            end: Alignment.bottomLeft,
           ),
         ),
       ],
@@ -243,13 +251,18 @@ class ThemeProvider with ChangeNotifier {
         iconTheme: const IconThemeData(color: Colors.white),
       ),
       
+      dialogTheme: DialogThemeData(
+        backgroundColor: colorScheme.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      ),
+
       cardTheme: CardThemeData(
         color: colorScheme.surface,
         elevation: isDark ? 0 : 2,
         shadowColor: Colors.black12,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(22),
           side: isDark ? BorderSide(color: Colors.white.withValues(alpha: .08)) : BorderSide.none,
         ),
       ),
@@ -258,18 +271,18 @@ class ThemeProvider with ChangeNotifier {
         filled: true,
         fillColor: colorScheme.surface,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(18),
           borderSide: BorderSide(color: isDark ? Colors.white12 : Colors.grey.shade300),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(18),
           borderSide: BorderSide(color: isDark ? Colors.white12 : Colors.grey.shade300),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(18),
           borderSide: BorderSide(color: colorScheme.primary, width: 2),
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         hintStyle: TextStyle(color: isDark ? Colors.white38 : Colors.black38),
       ),
       
@@ -278,8 +291,8 @@ class ThemeProvider with ChangeNotifier {
           backgroundColor: colorScheme.primary,
           foregroundColor: isDark ? colorScheme.onPrimary : Colors.white,
           minimumSize: const Size(double.infinity, 54),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          elevation: 0,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
+          elevation: 2,
           textStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 16.sp),
         ),
       ),
@@ -287,9 +300,9 @@ class ThemeProvider with ChangeNotifier {
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           foregroundColor: isDark ? colorScheme.primary : colorScheme.primary,
-          side: BorderSide(color: colorScheme.primary),
+          side: BorderSide(color: colorScheme.primary, width: 1.5),
           minimumSize: const Size(double.infinity, 54),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
           textStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 16.sp),
         ),
       ),
@@ -311,11 +324,11 @@ class ThemeProvider with ChangeNotifier {
         backgroundColor: isDark ? colorScheme.surface : Colors.grey.shade100,
         selectedColor: colorScheme.primary,
         secondarySelectedColor: colorScheme.primary,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         labelStyle: TextStyle(color: colorScheme.onSurface, fontSize: 12.sp),
         secondaryLabelStyle: TextStyle(color: colorScheme.onPrimary, fontSize: 12.sp),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        side: isDark ? BorderSide(color: Colors.white. withValues(alpha: .08)) : BorderSide.none,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
+        side: isDark ? BorderSide(color: Colors.white.withValues(alpha: .08)) : BorderSide.none,
       ),
     );
   }

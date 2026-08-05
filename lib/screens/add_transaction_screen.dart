@@ -9,7 +9,35 @@ import '../widgets/calculator_widget.dart';
 
 class AddTransactionScreen extends StatefulWidget {
   final LocalTransaction? transaction;
-  const AddTransactionScreen({super.key, this.transaction});
+  final bool isModal;
+
+  const AddTransactionScreen({
+    super.key,
+    this.transaction,
+    this.isModal = false,
+  });
+
+  static Future<void> showModal(BuildContext context) {
+    return showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(ctx).viewInsets.bottom,
+        ),
+        child: Container(
+          height: MediaQuery.of(ctx).size.height * 0.85,
+          decoration: BoxDecoration(
+            color: Theme.of(ctx).scaffoldBackgroundColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: const AddTransactionScreen(isModal: true),
+        ),
+      ),
+    );
+  }
 
   @override
   State<AddTransactionScreen> createState() => _AddTransactionScreenState();
@@ -224,30 +252,39 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     bool isExpense = _transactionType == 'OUTFLOW';
     Color transactionColor = isExpense ? statusColors.outflow! : statusColors.inflow!;
 
-    return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: AppBar(
-        title: Text(
-          widget.transaction != null ? 'Edit Transaction' : 'New Transaction', 
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20.sp)
-        ),
-        backgroundColor: isDark ? theme.colorScheme.surface : transactionColor,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        actions: [
-          if (widget.transaction != null)
-            IconButton(
-              icon: const Icon(Icons.delete_outline),
-              onPressed: () => _confirmDelete(),
+    final bodyContent = SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 3.h),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (widget.isModal) ...[
+            Center(
+              child: Container(
+                width: 12.w,
+                height: 5,
+                margin: EdgeInsets.only(bottom: 2.h),
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.white24 : Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
             ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 3.h),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  widget.transaction != null ? 'Edit Transaction' : 'New Transaction',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20.sp),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+            SizedBox(height: 2.h),
+          ],
             // Amount Input Header
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -395,6 +432,58 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
             SizedBox(height: 2.h),
           ],
         ),
+      );
+
+    if (widget.isModal) {
+      return bodyContent;
+    }
+
+    final topPadding = MediaQuery.of(context).padding.top;
+
+    return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
+      body: Column(
+        children: [
+          Padding(
+            padding: EdgeInsets.only(
+              top: topPadding + 8,
+              left: 2.w,
+              right: 4.w,
+              bottom: 1.h,
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    IconButton(
+                      icon: Icon(
+                        Icons.arrow_back_ios_new,
+                        color: isDark ? Colors.white : const Color(0xFF0F172A),
+                        size: 20,
+                      ),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                    SizedBox(width: 1.w),
+                    Text(
+                      widget.transaction != null ? 'Edit Transaction' : 'New Transaction',
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontSize: 22.sp,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+                if (widget.transaction != null)
+                  IconButton(
+                    icon: Icon(Icons.delete_outline, color: theme.colorScheme.error),
+                    onPressed: _confirmDelete,
+                  ),
+              ],
+            ),
+          ),
+          Expanded(child: bodyContent),
+        ],
       ),
     );
   }

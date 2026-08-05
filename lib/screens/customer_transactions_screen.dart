@@ -19,64 +19,103 @@ class CustomerTransactionsScreen extends StatelessWidget {
     final currencyFormat = NumberFormat.currency(symbol: '₦', decimalDigits: 2);
     final dateFormat = DateFormat('MMM dd, yyyy • hh:mm a');
     final dbService = DatabaseService();
+    final isDark = theme.brightness == Brightness.dark;
+    final topPadding = MediaQuery.of(context).padding.top;
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(customer.fullName, 
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: SizeConfig.setSp(18))),
-            Text(
-              customer.relationType == 'DEBTOR' ? 'Debtor Ledger' : 'Creditor Ledger',
-              style: TextStyle(fontSize: SizeConfig.setSp(12), fontWeight: FontWeight.normal),
+      body: Column(
+        children: [
+          // ── Seamless Custom Top Header ──────
+          Padding(
+            padding: EdgeInsets.only(
+              top: topPadding + 8,
+              left: 2.w,
+              right: 4.w,
+              bottom: 1.h,
             ),
-          ],
-        ),
-        backgroundColor: theme.appBarTheme.backgroundColor,
-        foregroundColor: theme.appBarTheme.foregroundColor,
-      ),
-      body: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        child: Column(
-          children: [
-            _buildCustomerSummary(context, statusColors),
-            StreamBuilder<List<LocalTransaction>>(
-              stream: dbService.watchCustomerTransactions(customer.id),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return Padding(
-                    padding: EdgeInsets.only(top: SizeConfig.blockHeight(10)),
-                    child: const Center(child: CircularProgressIndicator()),
-                  );
-                }
-                if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                  return Padding(
-                    padding: EdgeInsets.only(top: SizeConfig.blockHeight(10)),
-                    child: Center(
-                      child: Text('No transaction history found.', 
-                        style: TextStyle(fontSize: SizeConfig.setSp(14), color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.5))),
+            child: Row(
+              children: [
+                IconButton(
+                  icon: Icon(
+                    Icons.arrow_back_ios_new,
+                    color: isDark ? Colors.white : const Color(0xFF0F172A),
+                    size: 20,
+                  ),
+                  onPressed: () => Navigator.pop(context),
+                ),
+                SizedBox(width: 1.w),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      customer.fullName,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontSize: 20.sp,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
-                  );
-                }
-
-                final transactions = snapshot.data!;
-                return ListView.separated(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  padding: EdgeInsets.all(SizeConfig.blockWidth(4)),
-                  itemCount: transactions.length,
-                  separatorBuilder: (context, index) => Divider(color: theme.dividerColor),
-                  itemBuilder: (context, index) {
-                    final tx = transactions[index];
-                    return _buildTransactionTile(context, tx, currencyFormat, dateFormat, statusColors);
-                  },
-                );
-              },
+                    Text(
+                      customer.relationType == 'DEBTOR' ? 'Debtor Ledger' : 'Creditor Ledger',
+                      style: TextStyle(
+                        fontSize: 12.sp,
+                        color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.6),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+          Expanded(
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: Column(
+                children: [
+                  _buildCustomerSummary(context, statusColors),
+                  StreamBuilder<List<LocalTransaction>>(
+                    stream: dbService.watchCustomerTransactions(customer.id),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return Padding(
+                          padding: EdgeInsets.only(top: SizeConfig.blockHeight(10)),
+                          child: const Center(child: CircularProgressIndicator()),
+                        );
+                      }
+                      if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                        return Padding(
+                          padding: EdgeInsets.only(top: SizeConfig.blockHeight(10)),
+                          child: Center(
+                            child: Text(
+                              'No transaction history found.',
+                              style: TextStyle(
+                                fontSize: SizeConfig.setSp(14),
+                                color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.5),
+                              ),
+                            ),
+                          ),
+                        );
+                      }
+
+                      final transactions = snapshot.data!;
+                      return ListView.separated(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        padding: EdgeInsets.all(SizeConfig.blockWidth(4)),
+                        itemCount: transactions.length,
+                        separatorBuilder: (context, index) => Divider(color: theme.dividerColor),
+                        itemBuilder: (context, index) {
+                          final tx = transactions[index];
+                          return _buildTransactionTile(context, tx, currencyFormat, dateFormat, statusColors);
+                        },
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

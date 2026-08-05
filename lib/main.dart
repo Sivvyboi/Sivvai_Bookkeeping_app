@@ -14,7 +14,8 @@ void main() async {
   WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
   FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
 
-  // 2. Lock orientation to portrait only
+  // 2. Lock orientation to portrait & enable edge-to-edge system bars
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
@@ -102,7 +103,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             // Set System UI Overlay Style based on the current theme dynamically
             SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
               statusBarColor: Colors.transparent,
-              statusBarIconBrightness: Brightness.light,
+              statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+              statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
               systemNavigationBarColor: isDark ? const Color(0xFF0F172A) : Colors.white,
               systemNavigationBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
             ));

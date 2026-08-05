@@ -22,70 +22,96 @@ class DebtLedgerScreen extends StatelessWidget {
     final statusColors = theme.extension<StatusColors>()!;
     final currencyFormat = NumberFormat.currency(symbol: '₦', decimalDigits: 2);
 
+    final isDark = theme.brightness == Brightness.dark;
+    final topPadding = MediaQuery.of(context).padding.top;
+
     return DefaultTabController(
       length: 2,
       child: Scaffold(
         backgroundColor: theme.scaffoldBackgroundColor,
-        appBar: AppBar(
-          title: Text('Ledger Management',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20.sp)),
-          actions: [
-            PopupMenuButton<String>(
-              icon: const Icon(Icons.more_vert, color: Colors.white),
-              onSelected: (value) {
-                if (value == 'history') {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const GlobalHistoryScreen()),
-                  );
-                } else if (value == 'contacts') {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const ManageContactsScreen()),
-                  );
-                }
-              },
-              itemBuilder: (BuildContext context) => [
-                const PopupMenuItem(
-                  value: 'history',
-                  child: Row(
-                    children: [
-                      Icon(Icons.history, color: Colors.black54),
-                      SizedBox(width: 8),
-                      Text('View Global History'),
+        body: Column(
+          children: [
+            // ── Seamless Custom Top Header ──────
+            Padding(
+              padding: EdgeInsets.only(
+                top: topPadding + 8,
+                left: 4.w,
+                right: 2.w,
+                bottom: 0.5.h,
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Ledger Management',
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontSize: 24.sp,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  PopupMenuButton<String>(
+                    icon: Icon(Icons.more_vert, color: isDark ? Colors.white : const Color(0xFF0F172A)),
+                    onSelected: (value) {
+                      if (value == 'history') {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const GlobalHistoryScreen()),
+                        );
+                      } else if (value == 'contacts') {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const ManageContactsScreen()),
+                        );
+                      }
+                    },
+                    itemBuilder: (BuildContext context) => [
+                      const PopupMenuItem(
+                        value: 'history',
+                        child: Row(
+                          children: [
+                            Icon(Icons.history, color: Colors.black54),
+                            SizedBox(width: 8),
+                            Text('View Global History'),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: 'contacts',
+                        child: Row(
+                          children: [
+                            Icon(Icons.people_outline, color: Colors.black54),
+                            SizedBox(width: 8),
+                            Text('Manage Contacts'),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
-                ),
-                const PopupMenuItem(
-                  value: 'contacts',
-                  child: Row(
-                    children: [
-                      Icon(Icons.people_outline, color: Colors.black54),
-                      SizedBox(width: 8),
-                      Text('Manage Contacts'),
-                    ],
-                  ),
-                ),
+                ],
+              ),
+            ),
+            TabBar(
+              indicatorColor: theme.colorScheme.primary,
+              labelColor: theme.colorScheme.primary,
+              unselectedLabelColor: isDark ? Colors.white60 : Colors.black54,
+              tabs: const [
+                Tab(text: 'Money to Collect'),
+                Tab(text: 'Money to Pay'),
               ],
             ),
+            Expanded(
+              child: Consumer<TransactionProvider>(
+                builder: (context, provider, child) {
+                  return TabBarView(
+                    children: [
+                      _buildDebtorTab(context, provider, currencyFormat, statusColors),
+                      _buildCreditorTab(context, provider, currencyFormat, statusColors),
+                    ],
+                  );
+                },
+              ),
+            ),
           ],
-          bottom: TabBar(
-            indicatorColor: theme.tabBarTheme.indicatorColor,
-            tabs: const [
-              Tab(text: 'Money to Collect'),
-              Tab(text: 'Money to Pay'),
-            ],
-          ),
-        ),
-        body: Consumer<TransactionProvider>(
-          builder: (context, provider, child) {
-            return TabBarView(
-              children: [
-                _buildDebtorTab(context, provider, currencyFormat, statusColors),
-                _buildCreditorTab(context, provider, currencyFormat, statusColors),
-              ],
-            );
-          },
         ),
       ),
     );

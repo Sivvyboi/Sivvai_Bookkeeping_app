@@ -12,88 +12,133 @@ class ProfileScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     SizeConfig.init(context);
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final topPadding = MediaQuery.of(context).padding.top;
+    final canPop = Navigator.canPop(context);
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: AppBar(
-        title: Text(
-          'Manage Profiles',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20.sp),
-        ),
-      ),
-      body: Consumer<ProfileProvider>(
-        builder: (context, profileProvider, _) {
-          if (profileProvider.isSwitching) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          final profiles = profileProvider.profiles;
-          final active = profileProvider.activeProfile;
-
-          return ListView(
-            padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 2.h),
-            children: [
-              // ── Info banner ────────────────────────────────────────────
-              _InfoBanner(),
-              SizedBox(height: 2.h),
-
-              // ── Profile list ───────────────────────────────────────────
-              Text(
-                'YOUR PROFILES',
-                style: TextStyle(
-                  fontSize: 11.sp,
-                  fontWeight: FontWeight.w800,
-                  color: theme.colorScheme.primary,
-                  letterSpacing: 1.2,
-                ),
-              ),
-              SizedBox(height: 1.h),
-
-              ...profiles.map((profile) => _ProfileTile(
-                    profile: profile,
-                    isActive: profile.id == active?.id,
-                    onSwitch: () async {
-                      if (profile.id == active?.id) {
-                        Navigator.pop(context);
-                        return;
-                      }
-                      final txProvider =
-                          context.read<TransactionProvider>();
-                      await profileProvider.switchProfile(
-                        profile,
-                        onSwitched: txProvider.reinitialize,
-                      );
-                      if (context.mounted) Navigator.pop(context);
-                    },
-                    onRename: () => _showRenameDialog(
-                      context,
-                      profileProvider,
-                      profile,
+      body: Column(
+        children: [
+          // ── Seamless Custom Top Header ──────
+          Padding(
+            padding: EdgeInsets.only(
+              top: topPadding + 8,
+              left: 2.w,
+              right: 4.w,
+              bottom: 1.h,
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    if (canPop)
+                      IconButton(
+                        icon: Icon(
+                          Icons.arrow_back_ios_new,
+                          color: isDark ? Colors.white : const Color(0xFF0F172A),
+                          size: 20,
+                        ),
+                        onPressed: () => Navigator.pop(context),
+                      )
+                    else
+                      SizedBox(width: 2.w),
+                    Text(
+                      'Manage Profiles',
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontSize: 22.sp,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
-                    onDelete: () => _showDeleteConfirm(
-                      context,
-                      profileProvider,
-                      profile,
-                      isActive: profile.id == active?.id,
-                    ),
-                  )),
-
-              SizedBox(height: 2.h),
-
-              // ── Error message ──────────────────────────────────────────
-              if (profileProvider.errorMessage != null)
-                Padding(
-                  padding: EdgeInsets.only(bottom: 1.5.h),
-                  child: Text(
-                    profileProvider.errorMessage!,
-                    style: TextStyle(
-                        color: theme.colorScheme.error, fontSize: 13.sp),
-                    textAlign: TextAlign.center,
-                  ),
+                  ],
                 ),
-            ],
-          );
-        },
+                IconButton(
+                  icon: Icon(Icons.add_circle_outline, color: theme.colorScheme.primary, size: 26),
+                  onPressed: () => _showCreateDialog(context),
+                  tooltip: 'New Profile',
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: Consumer<ProfileProvider>(
+              builder: (context, profileProvider, _) {
+                if (profileProvider.isSwitching) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                final profiles = profileProvider.profiles;
+                final active = profileProvider.activeProfile;
+
+                return ListView(
+                  physics: const BouncingScrollPhysics(),
+                  padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 2.h),
+                  children: [
+                    // ── Info banner ────────────────────────────────────────────
+                    _InfoBanner(),
+                    SizedBox(height: 2.h),
+
+                    // ── Profile list ───────────────────────────────────────────
+                    Text(
+                      'YOUR PROFILES',
+                      style: TextStyle(
+                        fontSize: 11.sp,
+                        fontWeight: FontWeight.w800,
+                        color: theme.colorScheme.primary,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                    SizedBox(height: 1.h),
+
+                    ...profiles.map((profile) => _ProfileTile(
+                          profile: profile,
+                          isActive: profile.id == active?.id,
+                          onSwitch: () async {
+                            if (profile.id == active?.id) {
+                              Navigator.pop(context);
+                              return;
+                            }
+                            final txProvider =
+                                context.read<TransactionProvider>();
+                            await profileProvider.switchProfile(
+                              profile,
+                              onSwitched: txProvider.reinitialize,
+                            );
+                            if (context.mounted) Navigator.pop(context);
+                          },
+                          onRename: () => _showRenameDialog(
+                            context,
+                            profileProvider,
+                            profile,
+                          ),
+                          onDelete: () => _showDeleteConfirm(
+                            context,
+                            profileProvider,
+                            profile,
+                            isActive: profile.id == active?.id,
+                          ),
+                        )),
+
+                    SizedBox(height: 2.h),
+
+                    // ── Error message ──────────────────────────────────────────
+                    if (profileProvider.errorMessage != null)
+                      Padding(
+                        padding: EdgeInsets.only(bottom: 1.5.h),
+                        child: Text(
+                          profileProvider.errorMessage!,
+                          style: TextStyle(
+                              color: theme.colorScheme.error, fontSize: 13.sp),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showCreateDialog(context),

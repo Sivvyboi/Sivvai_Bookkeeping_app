@@ -13,18 +13,50 @@ class SettingsScreen extends StatelessWidget {
     SizeConfig.init(context);
     final themeProvider = Provider.of<ThemeProvider>(context);
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final canPop = Navigator.canPop(context);
+    final topPadding = MediaQuery.of(context).padding.top;
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: AppBar(
-        title: Text('Settings', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20.sp)),
-        backgroundColor: theme.appBarTheme.backgroundColor,
-        foregroundColor: theme.appBarTheme.foregroundColor,
-        elevation: 0,
-      ),
-      body: ListView(
-        padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 2.h),
+      body: Column(
         children: [
+          // ── Seamless Custom Top Header ──────
+          Padding(
+            padding: EdgeInsets.only(
+              top: topPadding + 8,
+              left: 2.w,
+              right: 4.w,
+              bottom: 1.h,
+            ),
+            child: Row(
+              children: [
+                if (canPop)
+                  IconButton(
+                    icon: Icon(
+                      Icons.arrow_back_ios_new,
+                      color: isDark ? Colors.white : const Color(0xFF0F172A),
+                      size: 20,
+                    ),
+                    onPressed: () => Navigator.pop(context),
+                  )
+                else
+                  SizedBox(width: 2.w),
+                Text(
+                  'Settings',
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontSize: 24.sp,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: ListView(
+              physics: const BouncingScrollPhysics(),
+              padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 1.h),
+              children: [
           _buildSectionHeader(context, 'Appearance'),
           Card(
             child: ExpansionTile(
@@ -141,7 +173,10 @@ class SettingsScreen extends StatelessWidget {
           ),
         ],
       ),
-    );
+    ),
+  ],
+),
+);
   }
 
   String _getThemeModeName(ThemeMode mode) {

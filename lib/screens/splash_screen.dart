@@ -83,6 +83,20 @@ class _SplashScreenState extends State<SplashScreen> {
     }
   }
 
+  Future<void> _retryAuth() async {
+    final security = Provider.of<SecurityProvider>(context, listen: false);
+    final authenticated = await security.authenticate();
+
+    if (authenticated && mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const MainNavigationWrapper()),
+      );
+    } else if (mounted) {
+      setState(() => _authFailed = true);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -103,7 +117,7 @@ class _SplashScreenState extends State<SplashScreen> {
               child: Padding(
                 padding: const EdgeInsets.only(bottom: 60.0),
                 child: ElevatedButton.icon(
-                  onPressed: _initializeApp,
+                  onPressed: _retryAuth,
                   icon: const Icon(Icons.fingerprint),
                   label: const Text('Unlock Sivvai'),
                   style: ElevatedButton.styleFrom(

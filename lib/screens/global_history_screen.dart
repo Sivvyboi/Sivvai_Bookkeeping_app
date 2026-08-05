@@ -25,47 +25,47 @@ class _GlobalHistoryScreenState extends State<GlobalHistoryScreen> {
     final theme = Theme.of(context);
     final statusColors = theme.extension<StatusColors>()!;
     final dateFormat = DateFormat('MMM dd • hh:mm a');
+    final isDark = theme.brightness == Brightness.dark;
+    final topPadding = MediaQuery.of(context).padding.top;
+    final canPop = Navigator.canPop(context);
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: AppBar(
-        title: Text(
-          'Global History',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20.sp),
-        ),
-        elevation: 0,
-      ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Tight row for the filter chips matching the ledger style spacing
+          // ── Seamless Custom Top Header ──────
           Padding(
-            padding: EdgeInsets.fromLTRB(4.w, 1.5.h, 4.w, 1.h),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  _buildDateChip('All', TransactionDateFilter.allTime),
-                  SizedBox(width: 2.w),
-                  _buildDateChip('Today', TransactionDateFilter.today),
-                  SizedBox(width: 2.w),
-                  _buildDateChip('This Week', TransactionDateFilter.thisWeek),
-                  SizedBox(width: 2.w),
-                  _buildDateChip('This Month', TransactionDateFilter.thisMonth),
-                ],
-              ),
+            padding: EdgeInsets.only(
+              top: topPadding + 8,
+              left: 2.w,
+              right: 4.w,
+              bottom: 1.h,
             ),
-          ),
-
-          // Ultra-compact header section row
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 0.5.h),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                    'Audit Log Ledger',
-                    style: theme.textTheme.titleMedium?.copyWith(fontSize: 16.sp, fontWeight: FontWeight.bold)
+                Row(
+                  children: [
+                    if (canPop)
+                      IconButton(
+                        icon: Icon(
+                          Icons.arrow_back_ios_new,
+                          color: isDark ? Colors.white : const Color(0xFF0F172A),
+                          size: 20,
+                        ),
+                        onPressed: () => Navigator.pop(context),
+                      )
+                    else
+                      SizedBox(width: 2.w),
+                    Text(
+                      'Global History',
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontSize: 24.sp,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
                 ),
                 PopupMenuButton<TransactionTypeFilter>(
                   initialValue: _typeFilter,
@@ -79,6 +79,26 @@ class _GlobalHistoryScreenState extends State<GlobalHistoryScreen> {
                   ],
                 ),
               ],
+            ),
+          ),
+
+          // Tight row for the filter chips matching the ledger style spacing
+          Padding(
+            padding: EdgeInsets.fromLTRB(4.w, 0.5.h, 4.w, 1.h),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              child: Row(
+                children: [
+                  _buildDateChip('All', TransactionDateFilter.allTime),
+                  SizedBox(width: 2.w),
+                  _buildDateChip('Today', TransactionDateFilter.today),
+                  SizedBox(width: 2.w),
+                  _buildDateChip('This Week', TransactionDateFilter.thisWeek),
+                  SizedBox(width: 2.w),
+                  _buildDateChip('This Month', TransactionDateFilter.thisMonth),
+                ],
+              ),
             ),
           ),
 

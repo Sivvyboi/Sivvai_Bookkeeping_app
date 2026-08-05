@@ -13,50 +13,91 @@ class ManageContactsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final provider = Provider.of<TransactionProvider>(context, listen: false);
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final topPadding = MediaQuery.of(context).padding.top;
+    final canPop = Navigator.canPop(context);
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: AppBar(
-        title: const Text('Manage Contacts'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.person_add_alt_1_outlined),
-            onPressed: () => _importFromContacts(context, provider),
-            tooltip: 'Import from Phone',
+      body: Column(
+        children: [
+          // ── Seamless Custom Top Header ──────
+          Padding(
+            padding: EdgeInsets.only(
+              top: topPadding + 8,
+              left: 2.w,
+              right: 4.w,
+              bottom: 1.h,
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    if (canPop)
+                      IconButton(
+                        icon: Icon(
+                          Icons.arrow_back_ios_new,
+                          color: isDark ? Colors.white : const Color(0xFF0F172A),
+                          size: 20,
+                        ),
+                        onPressed: () => Navigator.pop(context),
+                      )
+                    else
+                      SizedBox(width: 2.w),
+                    Text(
+                      'Manage Contacts',
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontSize: 22.sp,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+                IconButton(
+                  icon: Icon(Icons.person_add_alt_1_outlined, color: theme.colorScheme.primary, size: 24),
+                  onPressed: () => _importFromContacts(context, provider),
+                  tooltip: 'Import from Phone',
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: StreamBuilder<List<LocalCustomer>>(
+              stream: provider.watchCustomers(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                final customers = snapshot.data ?? [];
+
+                if (customers.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.people_outline, size: 64.sp, color: theme.dividerColor),
+                        SizedBox(height: 16.h),
+                        Text('No contacts found.', style: theme.textTheme.bodyLarge),
+                      ],
+                    ),
+                  );
+                }
+
+                return ListView.builder(
+                  physics: const BouncingScrollPhysics(),
+                  padding: EdgeInsets.all(16.w),
+                  itemCount: customers.length,
+                  itemBuilder: (context, index) {
+                    final customer = customers[index];
+                    return _ContactListTile(customer: customer);
+                  },
+                );
+              },
+            ),
           ),
         ],
-      ),
-      body: StreamBuilder<List<LocalCustomer>>(
-        stream: provider.watchCustomers(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          final customers = snapshot.data ?? [];
-
-          if (customers.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.people_outline, size: 64.sp, color: theme.dividerColor),
-                  SizedBox(height: 16.h),
-                  Text('No contacts found.', style: theme.textTheme.bodyLarge),
-                ],
-              ),
-            );
-          }
-
-          return ListView.builder(
-            padding: EdgeInsets.all(16.w),
-            itemCount: customers.length,
-            itemBuilder: (context, index) {
-              final customer = customers[index];
-              return _ContactListTile(customer: customer);
-            },
-          );
-        },
       ),
     );
   }

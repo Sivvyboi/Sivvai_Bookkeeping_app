@@ -11,26 +11,52 @@ class AnalyticsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final provider = Provider.of<TransactionProvider>(context);
+    final topPadding = MediaQuery.of(context).padding.top;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Financial Analytics', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20.sp)),
-      ),
-      body: SingleChildScrollView(
-        padding: EdgeInsets.all(4.w),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Cash Flow Summary', style: theme.textTheme.titleLarge),
-            SizedBox(height: 2.h),
-            _buildBarChart(context, provider),
-            SizedBox(height: 4.h),
-            Text('Expense Breakdown', style: theme.textTheme.titleLarge),
-            SizedBox(height: 2.h),
-            _buildPieChart(context, provider),
-            SizedBox(height: 4.h),
-          ],
-        ),
+      backgroundColor: theme.scaffoldBackgroundColor,
+      body: Column(
+        children: [
+          // ── Seamless Custom Top Header ──────
+          Padding(
+            padding: EdgeInsets.only(
+              top: topPadding + 12,
+              left: 4.w,
+              right: 4.w,
+              bottom: 1.5.h,
+            ),
+            child: Row(
+              children: [
+                Text(
+                  'Financial Analytics',
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontSize: 24.sp,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 2.h),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Cash Flow Summary', style: theme.textTheme.titleLarge),
+                  SizedBox(height: 2.h),
+                  _buildBarChart(context, provider),
+                  SizedBox(height: 4.h),
+                  Text('Expense Breakdown', style: theme.textTheme.titleLarge),
+                  SizedBox(height: 2.h),
+                  _buildPieChart(context, provider),
+                  SizedBox(height: 12.h),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
