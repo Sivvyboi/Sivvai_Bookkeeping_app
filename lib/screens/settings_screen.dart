@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import '../providers/theme_provider.dart';
 import '../providers/transaction_provider.dart';
 import '../providers/security_provider.dart';
+import '../providers/profile_provider.dart';
+import '../widgets/export_dialog.dart';
 import '../utils/size_config.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -109,6 +111,25 @@ class SettingsScreen extends StatelessWidget {
           Card(
             child: Column(
               children: [
+                ListTile(
+                  leading: Icon(Icons.picture_as_pdf_outlined, color: theme.colorScheme.primary),
+                  title: Text('Export Financial Reports', style: TextStyle(fontSize: 15.sp)),
+                  subtitle: Consumer<ProfileProvider>(
+                    builder: (context, profileProvider, _) {
+                      final activeName = profileProvider.activeProfile?.name ?? 'Active Profile';
+                      return Text('Generate PDF or Excel sheets for $activeName');
+                    },
+                  ),
+                  onTap: () {
+                    showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      backgroundColor: Colors.transparent,
+                      builder: (context) => const ExportDialog(),
+                    );
+                  },
+                ),
+                Divider(height: 1, color: theme.dividerTheme.color),
                 ListTile(
                   leading: Icon(Icons.share, color: theme.colorScheme.primary),
                   title: Text('Export Backup', style: TextStyle(fontSize: 15.sp)),

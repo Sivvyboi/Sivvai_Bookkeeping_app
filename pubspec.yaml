@@ -1,5 +1,5 @@
 name: sivvai_bookkeeper
-description: "A booKkeeping app to record business or personal transactions."
+description: "A bookkeeping app to record business or personal transactions."
 publish_to: 'none'
 
 version: 1.0.0+1
@@ -25,6 +25,8 @@ dependencies:
   shared_preferences: ^2.3.2
   permission_handler: ^13.0.0
   flutter_native_splash: ^2.4.1
+  pdf: ^3.10.8
+  excel: ^4.0.3
 
 dev_dependencies:
   flutter_test:
@@ -32,7 +34,7 @@ dev_dependencies:
   flutter_lints: ^6.0.0
   isar_generator: ^3.1.0+1
   build_runner: ^2.4.8
-  rename_app: ^1.6.6
+
 
 
 flutter_native_splash:
