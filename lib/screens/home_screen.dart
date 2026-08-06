@@ -364,61 +364,46 @@ class HomeTransactionHistoryList extends StatelessWidget {
             ? tx.remarks!
             : (isPayment ? 'Debt Payment' : (isOutflow ? 'Expense' : 'Sale'));
 
-        return Dismissible(
-          key: Key('tx_${tx.id}'),
-          direction: DismissDirection.endToStart,
-          background: Container(
-            alignment: Alignment.centerRight,
-            padding: EdgeInsets.only(right: 5.w),
-            margin: EdgeInsets.only(bottom: 1.5.h),
-            decoration: BoxDecoration(
-              color: Colors.redAccent,
-              borderRadius: BorderRadius.circular(20),
+        return Card(
+          elevation: 1,
+          margin: EdgeInsets.only(bottom: 1.5.h),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: ListTile(
+            contentPadding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 0.5.h),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => GlobalHistoryScreen(scrollToTransactionId: tx.id),
+              ),
             ),
-            child: const Icon(Icons.delete_outline, color: Colors.white),
-          ),
-          onDismissed: (_) => context.read<TransactionProvider>().deleteTransaction(tx.id),
-          child: Card(
-            elevation: 1,
-            margin: EdgeInsets.only(bottom: 1.5.h),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            child: ListTile(
-              contentPadding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 0.5.h),
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => GlobalHistoryScreen(scrollToTransactionId: tx.id),
-                ),
+            leading: CircleAvatar(
+              radius: 22,
+              backgroundColor: amountColor.withValues(alpha: 0.12),
+              child: Icon(
+                isCashOut ? Icons.arrow_upward : Icons.arrow_downward,
+                color: amountColor,
+                size: 20,
               ),
-              leading: CircleAvatar(
-                radius: 22,
-                backgroundColor: amountColor.withValues(alpha: 0.12),
-                child: Icon(
-                  isCashOut ? Icons.arrow_upward : Icons.arrow_downward,
-                  color: amountColor,
-                  size: 20,
-                ),
-              ),
-              title: Text(txLabel, style: const TextStyle(fontWeight: FontWeight.w600)),
-              subtitle: Text(
-                DateFormat('MMM dd • hh:mm a').format(tx.timestamp),
-                style: TextStyle(fontSize: 12.sp),
-              ),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    '${isCashOut ? "- " : "+ "}${currencyFormat.format(tx.amount)}',
-                    style: TextStyle(
-                      color: amountColor,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14.sp,
-                    ),
+            ),
+            title: Text(txLabel, style: const TextStyle(fontWeight: FontWeight.w600)),
+            subtitle: Text(
+              DateFormat('MMM dd • hh:mm a').format(tx.timestamp),
+              style: TextStyle(fontSize: 12.sp),
+            ),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '${isCashOut ? "- " : "+ "}${currencyFormat.format(tx.amount)}',
+                  style: TextStyle(
+                    color: amountColor,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14.sp,
                   ),
-                  SizedBox(width: 1.w),
-                  Icon(Icons.chevron_right, size: 18.sp, color: theme.hintColor),
-                ],
-              ),
+                ),
+                SizedBox(width: 1.w),
+                Icon(Icons.chevron_right, size: 18.sp, color: theme.hintColor),
+              ],
             ),
           ),
         );

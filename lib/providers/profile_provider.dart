@@ -73,6 +73,8 @@ class ProfileProvider with ChangeNotifier {
     try {
       await DatabaseService.switchToProfile(profile);
       _activeProfile = profile;
+      // Persist the selection so the next cold-start returns this profile.
+      await _profileService.setDefaultProfile(profile);
       if (onSwitched != null) await onSwitched();
     } catch (e) {
       _errorMessage = 'Failed to switch profile: ${e.toString()}';

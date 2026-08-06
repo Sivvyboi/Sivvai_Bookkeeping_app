@@ -1,10 +1,11 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../models/local_customer.dart';
 import '../providers/transaction_provider.dart';
 import '../utils/size_config.dart';
+import '../widgets/themed_dialogs.dart';
 
 class ManageContactsScreen extends StatelessWidget {
   const ManageContactsScreen({super.key});
@@ -87,7 +88,7 @@ class ManageContactsScreen extends StatelessWidget {
 
                 return ListView.builder(
                   physics: const BouncingScrollPhysics(),
-                  padding: EdgeInsets.all(16.w),
+                  padding: EdgeInsets.fromLTRB(4.w, 1.h, 4.w, 4.h),
                   itemCount: customers.length,
                   itemBuilder: (context, index) {
                     final customer = customers[index];
@@ -109,14 +110,12 @@ class ManageContactsScreen extends StatelessWidget {
       if (contact != null && context.mounted) {
         final name = contact.displayName ?? '';
         final phone = contact.phones.isNotEmpty ? contact.phones.first.number : '';
-        
+
         // Default to DEBTOR for new imports
         await provider.addCustomer(name, phone: phone, relationType: 'DEBTOR');
-        
+
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Imported $name successfully')),
-          );
+          ThemedDialogs.showSuccessSnackBar(context, 'Imported $name successfully.');
         }
       }
     } else {
@@ -136,93 +135,179 @@ class _ContactListTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final provider = Provider.of<TransactionProvider>(context, listen: false);
 
-    return Card(
-      margin: EdgeInsets.only(bottom: 2.h), // Fixed: Was 10.h which was huge
-      child: ListTile(
-        leading: CircleAvatar(
-          child: Text(customer.fullName.isNotEmpty ? customer.fullName[0].toUpperCase() : '?'),
+    final isDebtor = customer.relationType == 'DEBTOR';
+    final accentColor = isDebtor
+        ? theme.colorScheme.tertiary        // themed amber/orange tone
+        : theme.colorScheme.error;          // themed red tone
+
+    return Dismissible(
+      key: Key('contact_${customer.id}'),
+      direction: DismissDirection.endToStart,
+      confirmDismiss: (_) async {
+        final detail =
+            'Contact: ${customer.fullName}\n'
+            'Outstanding ledger balance: ${SizeConfig.formatCompactCurrency(customer.totalDebtAmount)}\n\n'
+            'Transaction history will be kept for accounting accuracy, '
+            'but the ledger balance for this contact will be removed.';
+        return await ThemedDialogs.showDeleteConfirmation(
+          context,
+          itemType: 'contact',
+          detail: detail,
+        );
+      },
+      onDismissed: (_) async {
+        await provider.deleteCustomer(customer.id);
+        if (context.mounted) {
+          ThemedDialogs.showSuccessSnackBar(context, '${customer.fullName} removed from contacts.');
+        }
+      },
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: EdgeInsets.only(right: 5.w),
+        margin: EdgeInsets.only(bottom: 2.h),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.error,
+          borderRadius: BorderRadius.circular(16),
         ),
-        title: Text(customer.fullName, style: theme.textTheme.titleMedium),
-        subtitle: Text(
-          'Balance: ${SizeConfig.formatCompactCurrency(customer.totalDebtAmount)} (${customer.relationType})',
-          style: TextStyle(color: customer.relationType == 'DEBTOR' ? Colors.orange : Colors.red),
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              icon: const Icon(Icons.edit_outlined),
-              onPressed: () => _showEditDialog(context, provider, customer),
+        child: const Icon(Icons.delete_outline, color: Colors.white),
+      ),
+      child: Card(
+        margin: EdgeInsets.only(bottom: 2.h),
+        child: ListTile(
+          contentPadding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 0.8.h),
+          leading: CircleAvatar(
+            backgroundColor: accentColor.withValues(alpha: 0.12),
+            child: Text(
+              customer.fullName.isNotEmpty ? customer.fullName[0].toUpperCase() : '?',
+              style: TextStyle(color: accentColor, fontWeight: FontWeight.bold),
             ),
-            IconButton(
-              icon: Icon(Icons.delete_outline, color: theme.colorScheme.error),
-              onPressed: () => _confirmDelete(context, provider),
-            ),
-          ],
+          ),
+          title: Text(customer.fullName, style: theme.textTheme.titleMedium),
+          subtitle: Row(
+            children: [
+              Container(
+                margin: const EdgeInsets.only(top: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: accentColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: accentColor.withValues(alpha: 0.3)),
+                ),
+                child: Text(
+                  '${isDebtor ? "Owes you" : "You owe"} ${SizeConfig.formatCompactCurrency(customer.totalDebtAmount)}',
+                  style: TextStyle(
+                    color: accentColor,
+                    fontSize: 11.sp,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                icon: Icon(
+                  Icons.edit_outlined,
+                  color: isDark ? Colors.white54 : Colors.black45,
+                ),
+                onPressed: () => _showEditDialog(context, provider, customer),
+              ),
+              IconButton(
+                icon: Icon(Icons.delete_outline, color: theme.colorScheme.error),
+                onPressed: () => _confirmDelete(context, provider),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  void _confirmDelete(BuildContext context, TransactionProvider provider) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete Contact?'),
-        content: const Text(
-            'This will remove the contact profile but keep all transaction history for accounting accuracy.'
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () async {
-              await provider.deleteCustomer(customer.id);
-              if (ctx.mounted) Navigator.pop(ctx);
-            },
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
+  Future<void> _confirmDelete(BuildContext context, TransactionProvider provider) async {
+    final detail =
+        'Contact: ${customer.fullName}\n'
+        'Outstanding ledger balance: ${SizeConfig.formatCompactCurrency(customer.totalDebtAmount)}\n\n'
+        'Transaction history will be kept for accounting accuracy, '
+        'but the ledger balance for this contact will be removed.';
+
+    final confirmed = await ThemedDialogs.showDeleteConfirmation(
+      context,
+      itemType: 'contact',
+      detail: detail,
     );
+    if (confirmed == true && context.mounted) {
+      await provider.deleteCustomer(customer.id);
+      if (context.mounted) {
+        ThemedDialogs.showSuccessSnackBar(context, '${customer.fullName} removed from contacts.');
+      }
+    }
   }
 
   void _showEditDialog(BuildContext context, TransactionProvider provider, LocalCustomer customer) {
+    final theme = Theme.of(context);
     final nameController = TextEditingController(text: customer.fullName);
     final phoneController = TextEditingController(text: customer.phoneNumber ?? '');
 
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Edit Contact'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Text(
+          'Edit Contact',
+          style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: nameController,
-              decoration: const InputDecoration(labelText: 'Full Name'),
+              decoration: InputDecoration(
+                labelText: 'Full Name',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: theme.colorScheme.primary, width: 2),
+                ),
+              ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: phoneController,
-              decoration: const InputDecoration(labelText: 'Phone Number'),
+              decoration: InputDecoration(
+                labelText: 'Phone Number',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: theme.colorScheme.primary, width: 2),
+                ),
+              ),
               keyboardType: TextInputType.phone,
             ),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
             onPressed: () async {
               if (nameController.text.trim().isNotEmpty) {
                 customer.fullName = nameController.text.trim();
                 customer.phoneNumber = phoneController.text.trim();
                 await provider.updateCustomer(customer);
-                await provider.refreshData(); // Forces stream layout synchronization
+                await provider.refreshData();
                 if (ctx.mounted) Navigator.pop(ctx);
               }
             },
+            style: FilledButton.styleFrom(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
             child: const Text('Save'),
           ),
         ],

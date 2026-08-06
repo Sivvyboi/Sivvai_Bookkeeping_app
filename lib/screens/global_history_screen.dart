@@ -5,6 +5,7 @@ import '../models/local_transaction.dart';
 import '../providers/transaction_provider.dart';
 import '../providers/theme_provider.dart';
 import '../utils/size_config.dart';
+import '../widgets/themed_dialogs.dart';
 
 class GlobalHistoryScreen extends StatefulWidget {
   final num? scrollToTransactionId;
@@ -362,24 +363,18 @@ class _InteractiveTransactionCard extends StatelessWidget {
     );
   }
 
-  void _showDeleteConfirmation(BuildContext context, TransactionProvider provider) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Confirm Deletion'),
-        content: const Text('Are you sure you want to delete this transaction record? This operation recalculates your cash balances and cannot be undone.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () async {
-              await provider.deleteTransaction(tx.id);
-              await provider.refreshData();
-              if (ctx.mounted) Navigator.pop(ctx);
-            },
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
+  Future<void> _showDeleteConfirmation(BuildContext context, TransactionProvider provider) async {
+    final confirmed = await ThemedDialogs.showDeleteConfirmation(
+      context,
+      itemType: 'transaction',
+      detail: 'This recalculates your cash balances and cannot be undone.',
     );
+    if (confirmed == true && context.mounted) {
+      await provider.deleteTransaction(tx.id);
+      await provider.refreshData();
+      if (context.mounted) {
+        ThemedDialogs.showSuccessSnackBar(context, 'Transaction deleted successfully.');
+      }
+    }
   }
 }

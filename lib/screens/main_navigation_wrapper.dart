@@ -29,7 +29,6 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper>
   @override
   void initState() {
     super.initState();
-    // Continuous soft pulse glow animation for center FAB
     _glowController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1800),
@@ -55,106 +54,161 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper>
     SizeConfig.init(context);
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
+
+    final barColor = isDark ? const Color(0xFF1E293B) : Colors.white;
 
     return Scaffold(
       extendBody: true,
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _screens,
+      backgroundColor: theme.scaffoldBackgroundColor,
+      body: Stack(
+        children: [
+          // ── Main screen content ───────────────────────────────────────────
+          Positioned.fill(
+            child: IndexedStack(
+              index: _currentIndex,
+              children: _screens,
+            ),
+          ),
+
+          // ── Floating bottom navigation bar ────────────────────────────────
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: _buildFloatingNavBar(theme, isDark, barColor, bottomPadding),
+          ),
+        ],
       ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      floatingActionButton: AnimatedBuilder(
-        animation: _glowAnimation,
-        builder: (context, child) {
-          return Container(
-            width: 64,
-            height: 64,
+    );
+  }
+
+  Widget _buildFloatingNavBar(
+    ThemeData theme,
+    bool isDark,
+    Color barColor,
+    double bottomPadding,
+  ) {
+    final mediaQuery = MediaQuery.of(context);
+    final screenWidth = mediaQuery.size.width;
+    final screenHeight = mediaQuery.size.height;
+
+    // Dynamic measurements based on screen constraints
+    final horizontalMargin = (screenWidth * 0.04).clamp(10.0, 20.0);
+    final navBarHeight = (screenHeight * 0.08).clamp(62.0, 70.0);
+    final fabSize = (screenWidth * 0.15).clamp(52.0, 62.0);
+    final fabGap = fabSize + 8.0;
+    final fabTopOffset = -(fabSize * 0.42);
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        horizontalMargin,
+        0,
+        horizontalMargin,
+        (bottomPadding > 0 ? bottomPadding : 12.0),
+      ),
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.topCenter,
+        children: [
+          // ── Pill-shaped floating bar ──────────────────────────────────────
+          Container(
+            height: navBarHeight,
             decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: const LinearGradient(
-                colors: [
-                  Color(0xFF10B981), // Emerald green
-                  Color(0xFF06B6D4), // Bright cyan
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
+              color: barColor,
+              borderRadius: BorderRadius.circular(navBarHeight / 2),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF06B6D4).withValues(alpha: 0.45),
-                  blurRadius: _glowAnimation.value * 1.5,
-                  spreadRadius: _glowAnimation.value * 0.4,
+                  color: Colors.black.withValues(alpha: isDark ? 0.32 : 0.10),
+                  blurRadius: 24,
+                  spreadRadius: 0,
+                  offset: const Offset(0, 8),
+                ),
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: isDark ? 0.12 : 0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
                 ),
               ],
             ),
-            child: FloatingActionButton(
-              onPressed: _openAddTransactionModal,
-              elevation: 0,
-              focusElevation: 0,
-              hoverElevation: 0,
-              highlightElevation: 0,
-              backgroundColor: Colors.transparent,
-              shape: const CircleBorder(),
-              child: const Icon(
-                Icons.add,
-                size: 34,
-                color: Colors.white,
-              ),
-            ),
-          );
-        },
-      ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1E293B) : Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.08),
-              blurRadius: 20,
-              offset: const Offset(0, -4),
-            ),
-          ],
-          border: isDark
-              ? null
-              : Border(top: BorderSide(color: Colors.grey.shade200, width: 1)),
-        ),
-        child: BottomAppBar(
-          shape: const CircularNotchedRectangle(),
-          notchMargin: 10.0,
-          elevation: 0,
-          color: Colors.transparent,
-          clipBehavior: Clip.antiAlias,
-          child: SizedBox(
-            height: 62,
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                // Left items (Dashboard, Analytics)
+                // Left nav items
                 Expanded(
                   child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
-                      _buildNavItem(0, Icons.dashboard_outlined, Icons.dashboard, 'Dashboard'),
+                      _buildNavItem(0, Icons.dashboard_outlined, Icons.dashboard, 'Home'),
                       _buildNavItem(1, Icons.bar_chart_outlined, Icons.bar_chart, 'Analytics'),
                     ],
                   ),
                 ),
-                // Notch gap for center FAB
-                const SizedBox(width: 72),
-                // Right items (Ledger, Settings)
+
+                // Center gap — space for the raised FAB
+                SizedBox(width: fabGap),
+
+                // Right nav items
                 Expanded(
                   child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
                       _buildNavItem(2, Icons.menu_book_outlined, Icons.menu_book, 'Ledger'),
-                      _buildNavItem(3, Icons.settings_outlined,  Icons.settings,  'Settings'),
+                      _buildNavItem(3, Icons.settings_outlined, Icons.settings, 'Settings'),
                     ],
                   ),
                 ),
               ],
             ),
           ),
-        ),
+
+          // ── Raised gradient FAB ───────────────────────────────────────────
+          Positioned(
+            top: fabTopOffset,
+            child: AnimatedBuilder(
+              animation: _glowAnimation,
+              builder: (context, child) {
+                return Container(
+                  width: fabSize,
+                  height: fabSize,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: const LinearGradient(
+                      colors: [
+                        Color(0xFF10B981), // Emerald green
+                        Color(0xFF06B6D4), // Bright cyan
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF06B6D4).withValues(alpha: 0.50),
+                        blurRadius: _glowAnimation.value * 1.5,
+                        spreadRadius: _glowAnimation.value * 0.3,
+                      ),
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.18),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Material(
+                    color: Colors.transparent,
+                    shape: const CircleBorder(),
+                    clipBehavior: Clip.antiAlias,
+                    child: InkWell(
+                      onTap: _openAddTransactionModal,
+                      child: Icon(
+                        Icons.add,
+                        size: (fabSize * 0.48).clamp(24.0, 30.0),
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -171,28 +225,45 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper>
         ? theme.colorScheme.primary
         : (theme.brightness == Brightness.dark ? Colors.white54 : Colors.black45);
 
-    return InkWell(
-      onTap: () => setState(() => _currentIndex = index),
-      borderRadius: BorderRadius.circular(16),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            isSelected ? activeIcon : icon,
-            color: color,
-            size: 24,
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10.sp,
-              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-              color: color,
+    return Expanded(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => setState(() => _currentIndex = index),
+          borderRadius: BorderRadius.circular(20),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 200),
+                  child: Icon(
+                    isSelected ? activeIcon : icon,
+                    key: ValueKey(isSelected),
+                    color: color,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 10.sp,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      color: color,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }

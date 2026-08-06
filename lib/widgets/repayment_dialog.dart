@@ -80,6 +80,7 @@ class _RepaymentDialogState extends State<RepaymentDialog> {
     final theme = Theme.of(context);
 
     return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       title: Text(
         widget.customer.relationType == 'CREDITOR' ? 'Settle Credit Balance' : 'Settle Debt Balance',
         style: const TextStyle(fontWeight: FontWeight.bold),
@@ -104,6 +105,10 @@ class _RepaymentDialogState extends State<RepaymentDialog> {
                     labelText: 'Amount to Pay',
                     errorText: _errorText,
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: theme.colorScheme.primary, width: 2),
+                    ),
                     prefixText: '₦ ',
                   ),
                   onChanged: (val) {
@@ -113,7 +118,7 @@ class _RepaymentDialogState extends State<RepaymentDialog> {
               ),
               const SizedBox(width: 8),
               SizedBox(
-                height: 56, 
+                height: 56,
                 child: TextButton(
                   onPressed: _fillFullAmount,
                   style: TextButton.styleFrom(
@@ -132,12 +137,12 @@ class _RepaymentDialogState extends State<RepaymentDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(context), 
+          onPressed: () => Navigator.pop(context),
           child: Text('Cancel', style: TextStyle(color: theme.colorScheme.error)),
         ),
-        ElevatedButton(
+        FilledButton(
           onPressed: _validateAndConfirm,
-          style: ElevatedButton.styleFrom(
+          style: FilledButton.styleFrom(
             backgroundColor: theme.colorScheme.primary,
             foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),

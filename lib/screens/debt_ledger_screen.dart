@@ -7,6 +7,7 @@ import '../providers/transaction_provider.dart';
 import '../providers/theme_provider.dart';
 import '../models/local_customer.dart';
 import '../widgets/repayment_dialog.dart';
+import '../widgets/themed_dialogs.dart';
 import '../utils/size_config.dart';
 import 'customer_transactions_screen.dart';
 import 'global_history_screen.dart';
@@ -64,28 +65,31 @@ class DebtLedgerScreen extends StatelessWidget {
                         );
                       }
                     },
-                    itemBuilder: (BuildContext context) => [
-                      const PopupMenuItem(
-                        value: 'history',
-                        child: Row(
-                          children: [
-                            Icon(Icons.history, color: Colors.black54),
-                            SizedBox(width: 8),
-                            Text('View Global History'),
-                          ],
+                    itemBuilder: (BuildContext context) {
+                      final menuIconColor = isDark ? Colors.white54 : Colors.black54;
+                      return [
+                        PopupMenuItem(
+                          value: 'history',
+                          child: Row(
+                            children: [
+                              Icon(Icons.history, color: menuIconColor),
+                              const SizedBox(width: 8),
+                              const Text('View Global History'),
+                            ],
+                          ),
                         ),
-                      ),
-                      const PopupMenuItem(
-                        value: 'contacts',
-                        child: Row(
-                          children: [
-                            Icon(Icons.people_outline, color: Colors.black54),
-                            SizedBox(width: 8),
-                            Text('Manage Contacts'),
-                          ],
+                        PopupMenuItem(
+                          value: 'contacts',
+                          child: Row(
+                            children: [
+                              Icon(Icons.people_outline, color: menuIconColor),
+                              const SizedBox(width: 8),
+                              const Text('Manage Contacts'),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
+                      ];
+                    },
                   ),
                 ],
               ),
@@ -362,55 +366,74 @@ class DebtLedgerScreen extends StatelessWidget {
     }
   }
 
-  void _confirmDelete(BuildContext context, LocalCustomer customer) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete Contact?'),
-        content: const Text(
-            'This will remove the contact profile but keep all transaction history for accounting accuracy.'
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () async {
-              final provider = context.read<TransactionProvider>();
-              await provider.deleteCustomer(customer.id);
-              if (ctx.mounted) Navigator.pop(ctx);
-            },
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
+  Future<void> _confirmDelete(BuildContext context, LocalCustomer customer) async {
+    final detail =
+        'Contact: ${customer.fullName}\n'
+        'Outstanding ledger balance: ${SizeConfig.formatCompactCurrency(customer.totalDebtAmount)}\n\n'
+        'Transaction history will be kept for accounting accuracy, '
+        'but the ledger balance for this contact will be removed.';
+
+    final confirmed = await ThemedDialogs.showDeleteConfirmation(
+      context,
+      itemType: 'contact',
+      detail: detail,
     );
+    if (confirmed == true && context.mounted) {
+      await context.read<TransactionProvider>().deleteCustomer(customer.id);
+      if (context.mounted) {
+        ThemedDialogs.showSuccessSnackBar(context, '${customer.fullName} removed from contacts.');
+      }
+    }
   }
 
   void _showEditDialog(BuildContext context, LocalCustomer customer) {
+    final theme = Theme.of(context);
     final nameController = TextEditingController(text: customer.fullName);
     final phoneController = TextEditingController(text: customer.phoneNumber ?? '');
 
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Edit Contact'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Text(
+          'Edit Contact',
+          style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: nameController,
-              decoration: const InputDecoration(labelText: 'Full Name'),
+              decoration: InputDecoration(
+                labelText: 'Full Name',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: theme.colorScheme.primary, width: 2),
+                ),
+              ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: phoneController,
-              decoration: const InputDecoration(labelText: 'Phone Number (Optional)'),
+              decoration: InputDecoration(
+                labelText: 'Phone Number (Optional)',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: theme.colorScheme.primary, width: 2),
+                ),
+              ),
               keyboardType: TextInputType.phone,
             ),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
             onPressed: () async {
               if (nameController.text.trim().isNotEmpty) {
                 customer.fullName = nameController.text.trim();
@@ -421,6 +444,9 @@ class DebtLedgerScreen extends StatelessWidget {
                 if (ctx.mounted) Navigator.pop(ctx);
               }
             },
+            style: FilledButton.styleFrom(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
             child: const Text('Save'),
           ),
         ],
