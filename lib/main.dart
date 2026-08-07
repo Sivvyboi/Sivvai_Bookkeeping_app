@@ -6,6 +6,7 @@ import 'providers/transaction_provider.dart';
 import 'providers/theme_provider.dart';
 import 'providers/security_provider.dart';
 import 'providers/profile_provider.dart';
+import 'services/drive_backup_service.dart';
 import 'screens/splash_screen.dart';
 import 'utils/size_config.dart';
 
@@ -66,6 +67,11 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     if (state == AppLifecycleState.paused) {
       // Record the exact time the app went to the background
       _pausedTime = DateTime.now();
+
+      // Trigger automatic background Google Drive backup if enabled
+      final profileProvider = context.read<ProfileProvider>();
+      final profileName = profileProvider.activeProfile?.name ?? 'Default';
+      DriveBackupService().performAutoBackup(profileName: profileName);
     } else if (state == AppLifecycleState.resumed) {
       if (_pausedTime != null) {
         final timeDifference = DateTime.now().difference(_pausedTime!);

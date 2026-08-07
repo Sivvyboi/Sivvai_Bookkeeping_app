@@ -27,6 +27,10 @@ dependencies:
   flutter_native_splash: ^2.4.1
   pdf: ^3.10.8
   excel: ^4.0.3
+  google_sign_in: ^6.2.1
+  googleapis: ^13.1.0
+  http: ^1.2.1
+  extension_google_sign_in_as_googleapis_auth: ^2.0.1
 
 dev_dependencies:
   flutter_test:

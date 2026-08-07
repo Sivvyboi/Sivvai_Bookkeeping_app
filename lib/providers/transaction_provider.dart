@@ -1,9 +1,6 @@
 import 'dart:async';
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:isar/isar.dart';
-import 'package:share_plus/share_plus.dart';
-import 'package:file_picker/file_picker.dart';
 import '../models/local_customer.dart';
 import '../models/local_transaction.dart';
 import '../services/database_service.dart';
@@ -354,49 +351,23 @@ class TransactionProvider with ChangeNotifier {
     }
   }
 
-  Future<bool> exportData() async {
-    _setLoading(true);
-    try {
-      final filePath = await _dbService.exportBackup();
-      await Share.shareXFiles([XFile(filePath)], text: 'Bookkeeper App Backup');
-      return true;
-    } catch (e) {
-      _errorMessage = "Export failed: ${e.toString()}";
-      return false;
-    } finally {
-      _setLoading(false);
-    }
+  /// Pauses/cancels active Isar stream subscriptions prior to bulk clear/restore operations.
+  Future<void> pauseWatchers() async {
+    await _transactionSubscription?.cancel();
+    await _customerSubscription?.cancel();
+    _transactionSubscription = null;
+    _customerSubscription = null;
   }
 
-  Future<bool> importData() async {
+  Future<bool> wipeAllData() async {
     _setLoading(true);
     try {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['json'],
-      );
-      if (result != null && result.files.single.path != null) {
-        final file = File(result.files.single.path!);
-        final jsonString = await file.readAsString();
-        await _dbService.importBackup(jsonString);
-        return true;
-      }
-      return false;
-    } catch (e) {
-      _errorMessage = "Import failed: ${e.toString()}";
-      return false;
-    } finally {
-      _setLoading(false);
-    }
-  }
-
-  Future<bool> deleteAllData() async {
-    _setLoading(true);
-    try {
-      await _dbService.clearAllData();
+      await pauseWatchers();
+      await _dbService.wipeAllData();
+      await reinitialize();
       return true;
     } catch (e) {
-      _errorMessage = "Delete failed: ${e.toString()}";
+      _errorMessage = "App wipe failed: ${e.toString()}";
       return false;
     } finally {
       _setLoading(false);

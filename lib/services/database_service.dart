@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../models/local_customer.dart';
 import '../models/local_transaction.dart';
 import '../models/app_profile.dart';
+import 'profile_service.dart';
 
 class DatabaseService {
   // ── Singleton ─────────────────────────────────────────────────────────────
@@ -313,49 +314,157 @@ class DatabaseService {
 
   // ── Backup / Restore ──────────────────────────────────────────────────────
 
-  Future<String> exportBackup({String? profileName}) async {
-    final customers = await isar.localCustomers.where().findAll();
-    final transactions = await isar.localTransactions.where().findAll();
+  // ── Multi-Profile Cloud Backup / Restore ────────────────────────────────
 
-    final transactionDataList = [];
-    for (var t in transactions) {
-      await t.customer.load();
-      transactionDataList.add({
-        'amount': t.amount,
-        'timestamp': t.timestamp.toIso8601String(),
-        'transactionType': t.transactionType,
-        'remarks': t.remarks ?? '',
-        'isCredit': t.isCredit,
-        'customerName': t.customer.value?.fullName,
+  /// Exports all created profiles, contacts, and transactions into a unified multi-profile JSON snapshot.
+  Future<String> exportFullMultiProfileBackup() async {
+    final profiles = await ProfileService().getProfiles();
+    final dir = await getApplicationDocumentsDirectory();
+
+    final List<Map<String, dynamic>> profilesJson = [];
+    final Map<String, Map<String, dynamic>> profilesDataJson = {};
+
+    for (final p in profiles) {
+      profilesJson.add({
+        'id': p.id,
+        'name': p.name,
+        'isarName': p.isarName,
+        'createdAt': p.createdAt.toIso8601String(),
+        'isDefault': p.isDefault,
+      });
+
+      final pIsar = Isar.getInstance(p.isarName) ??
+          await Isar.open(
+            [LocalCustomerSchema, LocalTransactionSchema],
+            directory: dir.path,
+            name: p.isarName,
+          );
+
+      final customers = await pIsar.localCustomers.where().findAll();
+      final transactions = await pIsar.localTransactions.where().findAll();
+
+      final transactionDataList = [];
+      for (var t in transactions) {
+        await t.customer.load();
+        transactionDataList.add({
+          'amount': t.amount,
+          'timestamp': t.timestamp.toIso8601String(),
+          'transactionType': t.transactionType,
+          'remarks': t.remarks ?? '',
+          'isCredit': t.isCredit,
+          'customerName': t.customer.value?.fullName,
+        });
+      }
+
+      profilesDataJson[p.isarName] = {
+        'customers': customers
+            .map((c) => {
+                  'fullName': c.fullName,
+                  'phoneNumber': c.phoneNumber ?? '',
+                  'totalDebtAmount': c.totalDebtAmount,
+                  'relationType': c.relationType,
+                  'lastUsed': c.lastUsed?.toIso8601String(),
+                })
+            .toList(),
+        'transactions': transactionDataList,
+      };
+    }
+
+    final backupPayload = {
+      'version': 7,
+      'type': 'multi_profile_backup',
+      'exportedAt': DateTime.now().toIso8601String(),
+      'profiles': profilesJson,
+      'profilesData': profilesDataJson,
+    };
+
+    final jsonString = jsonEncode(backupPayload);
+    final directory = await getTemporaryDirectory();
+    final dateStr = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+    final file = File('${directory.path}/bookkeeper_multibackup_$dateStr.json');
+    await file.writeAsString(jsonString);
+    return file.path;
+  }
+
+  /// Restores multi-profile cloud backup payload into local Isar database instances.
+  Future<AppProfile> importFullMultiProfileBackup(String jsonString) async {
+    final Map<String, dynamic> data = jsonDecode(jsonString.trim());
+
+    // Legacy single-profile fallback
+    if (!data.containsKey('profilesData')) {
+      await importBackup(jsonString);
+      final profiles = await ProfileService().getProfiles();
+      return profiles.firstWhere((p) => p.isDefault, orElse: () => profiles.first);
+    }
+
+    final dir = await getApplicationDocumentsDirectory();
+    final profilesJson = data['profiles'] as List;
+    final restoredProfiles = await ProfileService().restoreProfiles(profilesJson);
+
+    final profilesData = data['profilesData'] as Map<String, dynamic>;
+
+    for (final p in restoredProfiles) {
+      final pData = profilesData[p.isarName] as Map<String, dynamic>?;
+      if (pData == null) continue;
+
+      final pIsar = Isar.getInstance(p.isarName) ??
+          await Isar.open(
+            [LocalCustomerSchema, LocalTransactionSchema],
+            directory: dir.path,
+            name: p.isarName,
+          );
+
+      await pIsar.writeTxn(() async {
+        await pIsar.localTransactions.clear();
+        await pIsar.localCustomers.clear();
+
+        final Map<String, LocalCustomer> nameToCustomer = {};
+
+        final customersData = pData['customers'] as List;
+        for (var cData in customersData) {
+          final customer = LocalCustomer()
+            ..fullName = cData['fullName']
+            ..phoneNumber = cData['phoneNumber']
+            ..totalDebtAmount = (cData['totalDebtAmount'] as num).toDouble()
+            ..relationType = cData['relationType'] ?? 'DEBTOR'
+            ..lastUsed = cData['lastUsed'] != null
+                ? DateTime.parse(cData['lastUsed'])
+                : null;
+
+          await pIsar.localCustomers.put(customer);
+          nameToCustomer[customer.fullName] = customer;
+        }
+
+        final transactionsData = pData['transactions'] as List;
+        for (var tData in transactionsData) {
+          final transaction = LocalTransaction()
+            ..amount = (tData['amount'] as num).toDouble()
+            ..timestamp = DateTime.parse(tData['timestamp'])
+            ..transactionType = tData['transactionType']
+            ..remarks = tData['remarks']
+            ..isCredit = tData['isCredit'] ?? false;
+
+          final customerName = tData['customerName'];
+          if (customerName != null && nameToCustomer.containsKey(customerName)) {
+            transaction.customer.value = nameToCustomer[customerName];
+          }
+
+          await pIsar.localTransactions.put(transaction);
+        }
       });
     }
 
-    final data = {
-      'version': 6,
-      'profileName': profileName ?? 'Default',
-      'exportedAt': DateTime.now().toIso8601String(),
-      'customers': customers
-          .map((c) => {
-                'fullName': c.fullName,
-                'phoneNumber': c.phoneNumber ?? '',
-                'totalDebtAmount': c.totalDebtAmount,
-                'relationType': c.relationType,
-                'lastUsed': c.lastUsed?.toIso8601String(),
-              })
-          .toList(),
-      'transactions': transactionDataList,
-    };
+    final activeProfile = restoredProfiles.firstWhere(
+      (p) => p.isDefault,
+      orElse: () => restoredProfiles.first,
+    );
 
-    final jsonString = jsonEncode(data);
-    final directory = await getTemporaryDirectory();
-    final dateStr = DateFormat('yyyyMMdd').format(DateTime.now());
-    final safeName = (profileName ?? 'backup')
-        .toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9]+'), '_');
-    final file =
-        File('${directory.path}/bookkeeper_${safeName}_$dateStr.json');
-    await file.writeAsString(jsonString);
-    return file.path;
+    await switchToProfile(activeProfile);
+    return activeProfile;
+  }
+
+  Future<String> exportBackup({String? profileName}) async {
+    return exportFullMultiProfileBackup();
   }
 
   Future<void> importBackup(String jsonString) async {
@@ -399,17 +508,30 @@ class DatabaseService {
         }
 
         await isar.localTransactions.put(transaction);
-        if (transaction.customer.value != null) {
-          await transaction.customer.save();
-        }
       }
     });
   }
 
-  Future<void> clearAllData() async {
-    await isar.writeTxn(() async {
-      await isar.localTransactions.clear();
-      await isar.localCustomers.clear();
-    });
+  /// Wipes all data across all profiles, resets profiles in [ProfileService] to a single default profile, and switches to it.
+  Future<AppProfile> wipeAllData() async {
+    final profiles = await ProfileService().getProfiles();
+    final dir = await getApplicationDocumentsDirectory();
+
+    for (final p in profiles) {
+      final pIsar = Isar.getInstance(p.isarName) ??
+          await Isar.open(
+            [LocalCustomerSchema, LocalTransactionSchema],
+            directory: dir.path,
+            name: p.isarName,
+          );
+      await pIsar.writeTxn(() async {
+        await pIsar.localTransactions.clear();
+        await pIsar.localCustomers.clear();
+      });
+    }
+
+    final defaultProfile = await ProfileService().resetToDefault();
+    await switchToProfile(defaultProfile);
+    return defaultProfile;
   }
 }

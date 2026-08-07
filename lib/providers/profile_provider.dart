@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/app_profile.dart';
 import '../services/profile_service.dart';
 import '../services/database_service.dart';
+import '../services/drive_backup_service.dart';
 
 /// Manages the list of profiles and the currently active profile.
 ///
@@ -54,6 +55,13 @@ class ProfileProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  /// Called after a full app wipe to update active profile state to default profile.
+  void resetProfiles(AppProfile defaultProfile) {
+    _activeProfile = defaultProfile;
+    _profiles = [defaultProfile];
+    notifyListeners();
+  }
+
   // ── Profile Switching ─────────────────────────────────────────────────────
 
   /// Switches the active profile.
@@ -76,6 +84,9 @@ class ProfileProvider with ChangeNotifier {
       // Persist the selection so the next cold-start returns this profile.
       await _profileService.setDefaultProfile(profile);
       if (onSwitched != null) await onSwitched();
+      
+      // Trigger background auto-backup if enabled
+      DriveBackupService().performAutoBackup(profileName: profile.name);
     } catch (e) {
       _errorMessage = 'Failed to switch profile: ${e.toString()}';
     } finally {

@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.bookkeeping_app"
+    namespace = "com.labs.sivvai_bookkeeper"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
     compileSdk = 37
@@ -22,7 +22,7 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.bookkeeping_app"
+        applicationId = "com.labs.sivvai_bookkeeper"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion // Isar requires at least SDK 21

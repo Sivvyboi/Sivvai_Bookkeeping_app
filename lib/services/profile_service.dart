@@ -99,6 +99,36 @@ class ProfileService {
     });
   }
 
+  /// Wipes all profile records from the meta database and seeds a single fresh default profile ("Personal").
+  Future<AppProfile> resetToDefault() async {
+    await _metaIsar.writeTxn(() async {
+      await _metaIsar.appProfiles.clear();
+    });
+    return _createProfileInternal('Personal', isDefault: true);
+  }
+
+  /// Overwrites meta database profiles with the restored profile list from cloud backup.
+  Future<List<AppProfile>> restoreProfiles(List<dynamic> profilesJson) async {
+    await _metaIsar.writeTxn(() async {
+      await _metaIsar.appProfiles.clear();
+      for (var pMap in profilesJson) {
+        final p = pMap as Map<String, dynamic>;
+        final profile = AppProfile()
+          ..name = p['name'] ?? 'Restored Profile'
+          ..isarName = p['isarName'] ?? 'profile_${_slugify(p['name'] ?? 'restored')}'
+          ..createdAt = p['createdAt'] != null ? DateTime.parse(p['createdAt']) : DateTime.now()
+          ..isDefault = p['isDefault'] ?? false;
+        await _metaIsar.appProfiles.put(profile);
+      }
+    });
+
+    final all = await getProfiles();
+    if (all.isNotEmpty && !all.any((p) => p.isDefault)) {
+      await setDefaultProfile(all.first);
+    }
+    return getProfiles();
+  }
+
   // ── Helpers ──────────────────────────────────────────────────────────────
 
   static Future<AppProfile> _createProfileInternal(
