@@ -242,14 +242,19 @@ class _InteractiveTransactionCard extends StatelessWidget {
 
   void _showContactStyleBottomSheet(BuildContext context, TransactionProvider provider, String title, Color accentColor, bool isCashOut) {
     final theme = Theme.of(context);
+    // Capture the parent screen context BEFORE showing the sheet.
+    // The sheet's builder parameter shadows 'context' with a sheet-scoped
+    // context that becomes invalid once the sheet is popped — using it after
+    // Navigator.pop() causes the confirmation dialogs to silently fail.
+    final pageContext = context;
 
     showModalBottomSheet(
-      context: context,
+      context: pageContext,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.only(topLeft: Radius.circular(24), topRight: Radius.circular(24))
       ),
-      builder: (context) => Container(
-        padding: EdgeInsets.fromLTRB(6.w, 2.h, 6.w, 4.h), // Reverted back to exact ledger sheet dimensions
+      builder: (sheetContext) => Container(
+        padding: EdgeInsets.fromLTRB(6.w, 2.h, 6.w, 4.h),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -276,23 +281,25 @@ class _InteractiveTransactionCard extends StatelessWidget {
             ),
             SizedBox(height: 3.h),
             _buildOptionTile(
-                context,
+                sheetContext,
                 Icons.edit_outlined,
                 'Edit Transaction Details',
                 theme.colorScheme.primary,
                     () {
-                  Navigator.pop(context);
-                  _showEditDialog(context, provider);
+                  Navigator.pop(sheetContext);
+                  // Use the captured parent context — sheet context is dead after pop
+                  _showEditDialog(pageContext, provider);
                 }
             ),
             _buildOptionTile(
-                context,
+                sheetContext,
                 Icons.delete_outline,
                 'Delete Permanently',
                 Colors.red,
                     () {
-                  Navigator.pop(context);
-                  _showDeleteConfirmation(context, provider);
+                  Navigator.pop(sheetContext);
+                  // Use the captured parent context — sheet context is dead after pop
+                  _showDeleteConfirmation(pageContext, provider);
                 }
             ),
           ],
