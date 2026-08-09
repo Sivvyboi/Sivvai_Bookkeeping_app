@@ -176,16 +176,25 @@ class CustomerTransactionsScreen extends StatelessWidget {
   Widget _buildTransactionTile(BuildContext context, LocalTransaction tx, NumberFormat currencyFormat, DateFormat dateFormat, StatusColors statusColors) {
     final theme = Theme.of(context);
     bool isCredit = tx.isCredit;
-    bool isPayment = tx.transactionType == 'PAYMENT';
+    bool isPayment = tx.transactionType == 'PAYMENT' ||
+        tx.transactionType == 'PAYMENT_IN' ||
+        tx.transactionType == 'PAYMENT_OUT';
     
     String label = tx.transactionType;
-    if (isPayment) label = "Payment Received";
+    if (tx.transactionType == 'PAYMENT_IN' || (isPayment && customer.relationType == 'DEBTOR')) {
+      label = "Payment Received";
+    } else if (tx.transactionType == 'PAYMENT_OUT' || (isPayment && customer.relationType == 'CREDITOR')) {
+      label = "Payment Made";
+    }
     if (isCredit && tx.transactionType == 'INFLOW') label = "Credit Sale";
     if (isCredit && tx.transactionType == 'OUTFLOW') label = "Credit Purchase";
 
-    Color amountColor = tx.transactionType == 'INFLOW' 
-        ? statusColors.inflow! 
-        : (tx.transactionType == 'OUTFLOW' ? statusColors.outflow! : theme.colorScheme.primary);
+    bool isCashOut = tx.transactionType == 'OUTFLOW' || tx.transactionType == 'PAYMENT_OUT';
+
+    Color amountColor = isCashOut 
+        ? statusColors.outflow! 
+        : (tx.transactionType == 'INFLOW' || tx.transactionType == 'PAYMENT_IN' ? statusColors.inflow! : theme.colorScheme.primary);
+    if (tx.isCredit) amountColor = statusColors.debt!;
 
     return Padding(
       padding: EdgeInsets.symmetric(vertical: SizeConfig.blockHeight(1)),
@@ -198,7 +207,7 @@ class CustomerTransactionsScreen extends StatelessWidget {
               Text(label, 
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: SizeConfig.setSp(14), color: theme.textTheme.bodyLarge?.color)),
               Text(
-                (tx.transactionType == 'OUTFLOW' ? '- ' : '+ ') + currencyFormat.format(tx.amount),
+                (isCashOut ? '- ' : '+ ') + currencyFormat.format(tx.amount),
                 style: TextStyle(color: amountColor, fontWeight: FontWeight.bold, fontSize: SizeConfig.setSp(14)),
               ),
             ],

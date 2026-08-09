@@ -1,9 +1,10 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../models/local_customer.dart';
 import '../providers/transaction_provider.dart';
+import '../providers/theme_provider.dart';
 import '../utils/size_config.dart';
 import '../widgets/themed_dialogs.dart';
 
@@ -135,13 +136,14 @@ class _ContactListTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final statusColors = theme.extension<StatusColors>()!;
     final isDark = theme.brightness == Brightness.dark;
     final provider = Provider.of<TransactionProvider>(context, listen: false);
 
     final isDebtor = customer.relationType == 'DEBTOR';
     final accentColor = isDebtor
-        ? theme.colorScheme.tertiary        // themed amber/orange tone
-        : theme.colorScheme.error;          // themed red tone
+        ? (statusColors.debt ?? Colors.orange)
+        : (statusColors.outflow ?? Colors.red);
 
     return Dismissible(
       key: Key('contact_${customer.id}'),

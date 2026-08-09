@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import '../models/local_transaction.dart';
 import '../providers/transaction_provider.dart';
 import '../providers/theme_provider.dart';
 import '../providers/profile_provider.dart';
@@ -129,7 +130,6 @@ class HomeScreen extends StatelessWidget {
     StatusColors statusColors,
     bool isDark,
   ) {
-    Theme.of(context);
     final topPadding = MediaQuery.of(context).padding.top;
 
     return Container(
@@ -307,7 +307,7 @@ class HomeScreen extends StatelessWidget {
 // ── Transaction History List ──────────────────────────────────────────────────
 
 class HomeTransactionHistoryList extends StatelessWidget {
-  final List<dynamic> transactions;
+  final List<LocalTransaction> transactions;
   final NumberFormat currencyFormat;
   final StatusColors statusColors;
 

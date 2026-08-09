@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../providers/transaction_provider.dart';
+import '../providers/theme_provider.dart';
 import '../utils/size_config.dart';
 
 class AnalyticsScreen extends StatelessWidget {
@@ -63,6 +64,10 @@ class AnalyticsScreen extends StatelessWidget {
 
   Widget _buildBarChart(BuildContext context, TransactionProvider provider) {
     final theme = Theme.of(context);
+    final statusColors = theme.extension<StatusColors>()!;
+    final maxVal = provider.totalSales > provider.totalExpenses ? provider.totalSales : provider.totalExpenses;
+    final calculatedMaxY = maxVal > 0 ? maxVal * 1.2 : 100.0;
+
     return Container(
       height: 30.h,
       padding: EdgeInsets.all(4.w),
@@ -73,14 +78,14 @@ class AnalyticsScreen extends StatelessWidget {
       child: BarChart(
         BarChartData(
           alignment: BarChartAlignment.spaceAround,
-          maxY: provider.totalSales > provider.totalExpenses ? provider.totalSales * 1.2 : provider.totalExpenses * 1.2,
+          maxY: calculatedMaxY,
           barGroups: [
             BarChartGroupData(
               x: 0,
               barRods: [
                 BarChartRodData(
                   toY: provider.totalSales,
-                  color: Colors.green,
+                  color: statusColors.inflow ?? Colors.green,
                   width: 20,
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
                 ),
@@ -91,7 +96,7 @@ class AnalyticsScreen extends StatelessWidget {
               barRods: [
                 BarChartRodData(
                   toY: provider.totalExpenses,
-                  color: Colors.red,
+                  color: statusColors.outflow ?? Colors.red,
                   width: 20,
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
                 ),

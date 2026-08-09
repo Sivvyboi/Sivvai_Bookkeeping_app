@@ -76,13 +76,19 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       if (_pausedTime != null) {
         final timeDifference = DateTime.now().difference(_pausedTime!);
 
-        // If 5 minutes (or more) passed, require biometrics
-        if (timeDifference.inMinutes >= 5 && !_isAuthenticating) {
+        // If 1 minute (or more) passed, require biometrics
+        if (timeDifference.inMinutes >= 1 && !_isAuthenticating) {
           _isAuthenticating = true;
           final securityProvider = context.read<SecurityProvider>();
 
           if (securityProvider.isLockEnabled) {
-            await securityProvider.authenticate();
+            final authenticated = await securityProvider.authenticate();
+            if (!authenticated && mounted) {
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (_) => const SplashScreen()),
+                (route) => false,
+              );
+            }
           }
 
           _isAuthenticating = false;

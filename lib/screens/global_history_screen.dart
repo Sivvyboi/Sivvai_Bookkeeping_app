@@ -131,7 +131,7 @@ class _GlobalHistoryScreenState extends State<GlobalHistoryScreen> {
                     return tx.transactionType == 'OUTFLOW' && !tx.isCredit;
                   }
                   if (_typeFilter == TransactionTypeFilter.debts) {
-                    return tx.isCredit || tx.transactionType == 'PAYMENT';
+                    return tx.isCredit || tx.transactionType.startsWith('PAYMENT');
                   }
                   return true;
                 }).toList();
@@ -196,10 +196,12 @@ class _InteractiveTransactionCard extends StatelessWidget {
     final provider = Provider.of<TransactionProvider>(context, listen: false);
 
     final isOutflow = tx.transactionType == 'OUTFLOW';
-    final isPayment = tx.transactionType == 'PAYMENT';
+    final isPayment = tx.transactionType == 'PAYMENT' ||
+        tx.transactionType == 'PAYMENT_OUT' ||
+        tx.transactionType == 'PAYMENT_IN';
 
-    bool isCashOut = isOutflow;
-    if (isPayment && tx.customer.value != null) {
+    bool isCashOut = isOutflow || tx.transactionType == 'PAYMENT_OUT';
+    if (tx.transactionType == 'PAYMENT' && tx.customer.value != null) {
       isCashOut = tx.customer.value!.relationType == 'CREDITOR';
     }
 
